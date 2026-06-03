@@ -1,3 +1,7 @@
+// Ensure this file is treated as a module so the `declare global` augmentation
+// below is valid (global augmentations must live in a module).
+export {}
+
 // TC39 Uint8Array hex method (proposal) is not yet in the TS lib defs; declare
 // the slice the test environment shim provides so strict type-check passes.
 declare global {

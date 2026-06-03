@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit && vite build",
+    "type-check": "vue-tsc -p tsconfig.app.json --noEmit && vue-tsc -p tsconfig.vitest.json --noEmit && vue-tsc -p tsconfig.node.json --noEmit",
+    "build": "pnpm run type-check && vite build",
     "test": "vitest run"
   },
   "dependencies": {
@@ -17,6 +18,7 @@
     "vuetify": "^4.1.0"
   },
   "devDependencies": {
+    "@types/node": "^25.9.1",
     "@vitejs/plugin-vue": "^5.2.1",
     "@vue/test-utils": "^2.4.6",
     "jsdom": "^25.0.1",
