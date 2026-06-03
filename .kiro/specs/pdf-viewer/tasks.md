@@ -71,7 +71,7 @@
   - _Requirements: 2.1, 6.1, 6.2, 6.3, 6.4_
   - _Boundary: usePageVirtualizer_
   - _Depends: 2.2_
-- [ ] 3.5 ページ3層スタックコンポーネント
+- [x] 3.5 ページ3層スタックコンポーネント
   - キャンバス層・テキスト層・オーバーレイ層を同一原点で重ねる
   - 確認: 1ページがキャンバス+選択テキスト+空オーバーレイの重なりで表示される
   - _Requirements: 2.1, 2.4_
@@ -149,3 +149,5 @@
 - 解決バージョン: Vue 3.5.x / Vite 5.4.x / Vitest 2.1.x / Pinia 2.3.x / TypeScript 5.9.x / pdfjs-dist 6.0.x / Vuetify 4.1.x。
 - pdfjs-dist v6.0.227 は公開エントリから `PasswordException` を**エクスポートしない**（`InvalidPDFException` のみ）。タスク2.4のエラー写像はパスワード判定を `instanceof` ではなく `err.name === 'PasswordException'`（pdfjs 例外は name を持つ）で行うこと。
 - jsdom テストでは pdfjs v6 向けに `tests/setup.ts` が DOMMatrix と Uint8Array.toHex の環境 polyfill を提供（本番には載らない）。pdfjs を使うユニットテストはこの前提。`PDFDocumentProxy` に `destroy()` は無く `cleanup()` のみ。`destroy()` は loading task 側。
+- **重要**: `PDFPageProxy` / `PageViewport` 等の pdfjs オブジェクトを Vue のリアクティブプロキシのまま composable に渡すと、pdfjs 内部の WeakMap/`this` 束縛が壊れ TextLayer が0スパンになる等の不具合が出る。composable へ渡す前に必ず `toRaw()` する（PdfPage/PdfCanvasLayer/PdfTextLayer で適用済み。3.6/4.5 等でも同様に）。
+- レイヤ配置は各コンポーネントのインライン `position:absolute` で実装（`styles/layers.css` は必須ではない）。`.pdf-page` は `position:relative` で viewport 寸法。
