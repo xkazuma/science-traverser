@@ -52,7 +52,7 @@
   - _Requirements: 2.2, 4.1_
   - _Boundary: usePdfPageRender_
   - _Depends: 1.3, 1.4_
-- [ ] 3.2 (P) テキスト層 composable
+- [x] 3.2 (P) テキスト層 composable
   - テキスト層をキャンバスと同一原点・同寸で構築、選択可能
   - 確認: 描画ページ上でテキストを選択・コピーできる
   - _Requirements: 2.3_

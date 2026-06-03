@@ -35,6 +35,11 @@ export const InvalidPDFException = pdfjsLib.InvalidPDFException
 // swallowed. Surfacing it here lets the render composable detect it via
 // `instanceof` (with a `.name` fallback) without importing pdfjs-dist directly.
 export const RenderingCancelledException = pdfjsLib.RenderingCancelledException
+// Selectable-text layer (display/text_layer). `usePdfTextLayer` builds the
+// per-page text overlay via the v6 `TextLayer` *class* (`new TextLayer({...})`
+// then `.render()`), not the removed `renderTextLayer()` helper. Surfacing it
+// here keeps pdfjs-dist behind this single boundary (Req 2.3).
+export const TextLayer = pdfjsLib.TextLayer
 export const version = pdfjsLib.version
 
 export type {

@@ -25,6 +25,52 @@ if (!('ResizeObserver' in globalThis)) {
     ResizeObserverStub
 }
 
+// jsdom's `HTMLCanvasElement.getContext('2d')` returns `null` because no
+// canvas backend is installed. The pdfjs v6 *text layer* (`TextLayer`) is
+// otherwise jsdom-compatible (text extraction + DOM <span> layout need no real
+// rendering), but during layout it measures font ascent via a throwaway 2D
+// context: `getCtx()` does `ctx.canvas`, `ctx.font = ...`, `ctx.measureText('')`
+// reading `fontBoundingBox{Ascent,Descent}`. With a `null` context it crashes
+// ("Invalid value used as weak map key"). Provide a minimal, measurement-only 2D
+// context so the *real* TextLayer pipeline runs under jsdom and emits real
+// selectable spans (the composable is exercised for real, not faked). Falls
+// back to width=0 ascent metrics, which makes pdfjs use the per-style ascent —
+// fine for asserting selectable text presence/alignment. Purely a
+// test-environment shim; real browsers provide a true 2D context.
+if (typeof HTMLCanvasElement !== 'undefined') {
+  const proto = HTMLCanvasElement.prototype as unknown as {
+    getContext: (id: string) => unknown
+  }
+  const originalGetContext = proto.getContext
+  proto.getContext = function patchedGetContext(
+    this: HTMLCanvasElement,
+    contextId: string,
+  ): unknown {
+    if (contextId === '2d') {
+      const canvas = this
+      const ctx = {
+        canvas,
+        font: '',
+        measureText(): {
+          width: number
+          fontBoundingBoxAscent: number
+          fontBoundingBoxDescent: number
+        } {
+          return {
+            width: 0,
+            fontBoundingBoxAscent: 0,
+            fontBoundingBoxDescent: 0,
+          }
+        },
+      }
+      return ctx
+    }
+    return originalGetContext
+      ? originalGetContext.call(this, contextId)
+      : null
+  }
+}
+
 // jsdom does not implement DOMMatrix, but `pdfjs-dist` evaluates
 // `new DOMMatrix()` at module top level (display/canvas.js). Without this,
 // importing the `src/lib/pdf/pdfjs.ts` boundary throws before any test runs.
