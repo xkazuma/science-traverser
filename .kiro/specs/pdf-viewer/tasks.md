@@ -1,0 +1,145 @@
+# Implementation Plan
+
+- [ ] 1. Foundation: プロジェクト基盤・UI基盤・PDF境界
+- [x] 1.1 プロジェクト雛形を作成（Vite + Vue 3 + TypeScript strict + Pinia + Vitest）
+  - パッケージ初期化、`@/` を src へのエイリアス設定、開発/ビルド/テストの各コマンドを用意
+  - 起動確認: 空の App が dev で表示され、`pnpm build` と `pnpm test` が成功する
+  - _Requirements: 2.1_
+- [ ] 1.2 (P) Vuetify 4 を外枠UI基盤として導入
+  - vite-plugin-vuetify(autoImport) + @mdi/font、createVuetify 構成、ルートを <v-app> でラップ
+  - 確認: Vuetify ボタン等が描画され、MDI アイコンが表示される
+  - _Requirements: 7.5_
+  - _Boundary: plugins vuetify, App_
+  - _Depends: 1.1_
+- [ ] 1.3 (P) pdfjs 境界モジュールとワーカー設定
+  - pdfjs を import する単一モジュールを用意し、ワーカーを ?url で解決（CDN固定しない）
+  - 確認: 最小 PDF を読み込んでページ数が取得でき、ワーカーのバージョン不一致が出ない
+  - _Requirements: 1.5_
+  - _Boundary: lib pdf pdfjs_
+  - _Depends: 1.1_
+- [ ] 1.4 (P) 座標変換ユーティリティと往復恒等テスト
+  - PDF単位⇄表示px の相互変換（軸反転・倍率・DPR）を実装
+  - 確認: toPdf(toLayer(p)) ≈ p の往復恒等ユニットテストが通る
+  - _Requirements: 2.4, 8.2_
+  - _Boundary: lib pdf coordinates_
+  - _Depends: 1.1_
+
+- [ ] 2. Core: 状態・型・読み込み
+- [ ] 2.1 型定義（ビュー状態・ステータス・エラー種別・将来用overlay型スタブ）
+  - 確認: 型が strict でコンパイルし、annotations/layoutRegions/layoutGraph 型が予約として存在
+  - _Requirements: 8.4_
+- [ ] 2.2 Pinia ストアとユニットテスト
+  - doc/view 状態、状態機械 idle→loading→ready|error、zoom クランプ、requestGoToPage 範囲外無視、markRaw 保持、pendingScrollTo
+  - 確認: zoom クランプ・goToPage 範囲外無視・status 遷移のユニットテストが通る
+  - _Requirements: 3.1, 3.5, 4.2_
+  - _Depends: 2.1_
+- [ ] 2.3 (P) ファイル受け入れ（選択/D&D→ArrayBuffer・MIME検証）とテスト
+  - 選択とドロップから ArrayBuffer 化、application/pdf 以外は invalid-type、外部送信なし
+  - 確認: 非PDFが invalid-type になるユニットテストが通る
+  - _Requirements: 1.1, 1.2, 1.4, 1.5_
+  - _Boundary: useFileIntake_
+  - _Depends: 1.1_
+- [ ] 2.4 ドキュメント読み込み composable
+  - 読み込み・進捗(loadProgress)・エラー写像(password/corrupt/unknown)・破棄、ストア更新
+  - 確認: 破損/パスワードPDFで status=error と種別が設定される（エラー写像のユニットテスト）
+  - _Requirements: 7.1, 7.2, 7.3, 7.4_
+  - _Depends: 1.3, 2.2_
+
+- [ ] 3. Core: 描画・3層スタック・仮想化
+- [ ] 3.1 (P) ページ描画 composable（DPR対応・再描画キャンセル）
+  - バッキングストアをDPR倍、CSSボックスはviewport寸法、前回描画タスクをcancelしキャンセル例外を握り潰す
+  - 確認: ページが鮮明に描画され、倍率の連続変更で前回描画がキャンセルされる
+  - _Requirements: 2.2, 4.1_
+  - _Boundary: usePdfPageRender_
+  - _Depends: 1.3, 1.4_
+- [ ] 3.2 (P) テキスト層 composable
+  - テキスト層をキャンバスと同一原点・同寸で構築、選択可能
+  - 確認: 描画ページ上でテキストを選択・コピーできる
+  - _Requirements: 2.3_
+  - _Boundary: usePdfTextLayer_
+  - _Depends: 1.3_
+- [ ] 3.3 (P) オーバーレイ層コンポーネントとスロット契約ロックテスト
+  - 同一原点の空オーバーレイ層、viewport と座標変換関数をスコープ付きスロットで公開、フェーズ1は内容なし
+  - 確認: スロットへ viewport と変換関数が渡り、層の寸法が viewport 寸法に一致するコンポーネントテストが通る
+  - _Requirements: 8.1, 8.2, 8.3, 8.4_
+  - _Boundary: PdfOverlayLayer_
+  - _Depends: 1.4_
+- [ ] 3.4 仮想化 composable（プレースホルダ・可視判定・解放）
+  - 各ページ固有寸法×指定scaleでプレースホルダを算出し総量を正確化、近傍±Nのみ可視、遠方cleanup、ジャンプ用の絶対位置(offsetOf)、scale適用の再計算(recompute)、現在ページ追従
+  - 注: recompute は「与えられた scale でプレースホルダを再算出」する役割。フィット倍率そのものの算出は 5.2 が担う
+  - 確認: 多ページPDFで近傍ページのみ描画され、スクロール総量が全ページ分確保される
+  - _Requirements: 2.1, 6.1, 6.2, 6.3, 6.4_
+  - _Boundary: usePageVirtualizer_
+  - _Depends: 2.2_
+- [ ] 3.5 ページ3層スタックコンポーネント
+  - キャンバス層・テキスト層・オーバーレイ層を同一原点で重ねる
+  - 確認: 1ページがキャンバス+選択テキスト+空オーバーレイの重なりで表示される
+  - _Requirements: 2.1, 2.4_
+  - _Boundary: PdfPage, PdfCanvasLayer, PdfTextLayer_
+  - _Depends: 3.1, 3.2, 3.3_
+- [ ] 3.6 スクロール容器（連続スクロール・ジャンプ着地・現在ページ追従）
+  - 仮想化ホスト、pendingScrollTo監視→絶対位置へスクロール後クリア、スクロールでcurrentPage更新
+  - 確認: 連続スクロールで描画され、未描画ページへのジャンプが正しい位置に着地し、現在ページ表示が追従する
+  - _Requirements: 2.1, 3.2, 3.4_
+  - _Boundary: PdfViewport_
+  - _Depends: 3.4, 3.5_
+
+- [ ] 4. Core: chrome UI（Vuetify）
+- [ ] 4.1 (P) ツールバー（開く・前後・ジャンプ・ズーム・フィット操作・ページ数）
+  - Vuetify部品で構成、操作はstore action/emitのみ、現在ページ/総数表示、範囲・倍率上下限でボタン無効化、フィット選択でfitMode設定、操作のコンポーネントテスト
+  - 注: フィットの実描画倍率算出は 5.2 が担う。本タスクはフィット選択の発火まで
+  - 確認: 前後/ジャンプ/ズーム/フィット選択が正しいstore更新を起こし、境界でボタンが無効化される
+  - _Requirements: 3.1, 3.3, 3.4, 4.1, 4.3, 4.4_
+  - _Boundary: PdfToolbar_
+  - _Depends: 2.2_
+- [ ] 4.2 (P) ローディング/エラー/初期案内
+  - 進捗バー/スピナー、破損・パスワード・非PDFのメッセージ、未読み込み時の案内
+  - 確認: loading/error/idle の各状態で対応表示が出る
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
+  - _Boundary: PdfLoadingState, PdfErrorState_
+  - _Depends: 2.2_
+- [ ] 4.3 (P) ドロップゾーン（全面D&D・ドラッグ視覚FB）
+  - 全面ドロップ、ドラッグ中のオーバーレイ表示、受け入れはファイル受け入れ経由
+  - 確認: ファイルをドラッグするとFBが出て、ドロップで読み込みが始まる
+  - _Requirements: 1.2, 1.3_
+  - _Boundary: PdfDropZone_
+  - _Depends: 2.3_
+- [ ] 4.4 (P) アウトライン取得 composable
+  - しおり取得、移動先をページ番号へ解決、無い場合は空
+  - 確認: アウトライン有PDFで木が得られ、無い場合は空配列になる
+  - _Requirements: 5.1, 5.2, 5.5_
+  - _Boundary: usePdfOutline_
+  - _Depends: 1.3_
+- [ ] 4.5 (P) サムネイル一覧コンポーネント
+  - 各ページの縮小描画（ページ描画compを小倍率で利用）、仮想スクロールで一覧化、選択で requestGoToPage
+  - 確認: 全ページのサムネイルが一覧表示され、選択で該当ページへジャンプする
+  - _Requirements: 5.3, 5.4_
+  - _Boundary: PdfThumbnail_
+  - _Depends: 3.1, 3.4_
+- [ ] 4.6 サイドバー（アウトライン木 + サムネイル一覧の統合）
+  - アウトライン木を表示し選択で requestGoToPage、サムネイル一覧を内包、アウトライン無し表示
+  - 確認: アウトライン選択でジャンプし、アウトライン無しの場合はその旨を表示、サムネイルが並ぶ
+  - _Requirements: 5.1, 5.2, 5.5_
+  - _Boundary: PdfSidebar_
+  - _Depends: 4.4, 4.5_
+
+- [ ] 5. Integration: 全体結線・フィット
+- [ ] 5.1 ルート画面オーケストレーション
+  - App(<v-app>)配下でPdfViewerがstatusに応じLoading/Error/Viewport/Sidebar/Toolbar/DropZoneを結線、状態出し分けのコンポーネントテスト
+  - 確認: 起動→ファイル選択→描画→ナビの一連が一画面で通しで動く
+  - _Requirements: 2.1, 7.5_
+  - _Boundary: PdfViewer, App_
+  - _Depends: 3.6, 4.1, 4.2, 4.3, 4.6_
+- [ ] 5.2 ズーム/フィット結線（基準計算・リサイズ・再描画）
+  - フィット倍率をコンテナ幅基準で算出（width=最広ページが幅に収まる、page=最広/最高ページが領域に収まる単一scale）、scale/fitMode変更とResizeObserverでの変化検知時に仮想化の再計算と再描画を起こす
+  - 注: フィット倍率算出の唯一の所在地。本タスクが scale を確定し 3.4 の再計算へ渡す
+  - 確認: 幅/ページ全体フィットが正しい倍率で描画され、ウィンドウリサイズで再計算される
+  - _Requirements: 4.1, 4.3, 4.4, 4.5_
+  - _Depends: 5.1_
+
+- [ ] 6. Validation
+- [ ] 6.1 手動E2Eスモークとビルド検証
+  - dev起動で受け入れ基準を一通り確認（選択/D&D、連続スクロール、ページ追従、前後/ジャンプ、ズーム/フィット鮮明・連打非ちらつき、テキスト選択、アウトライン/サムネイル、大規模PDF応答性、破損/非PDF/パスワード表示）、`pnpm build`でワーカーアセットが出力される
+  - 確認: 上記シナリオが実機ブラウザで再現し、ビルドが成功する
+  - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.2, 3.3, 4.1, 5.2, 5.4, 6.1, 7.3_
+  - _Depends: 5.2_
