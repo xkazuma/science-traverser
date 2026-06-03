@@ -17,7 +17,7 @@
   - _Requirements: 1.5_
   - _Boundary: lib pdf pdfjs_
   - _Depends: 1.1_
-- [ ] 1.4 (P) 座標変換ユーティリティと往復恒等テスト
+- [x] 1.4 (P) 座標変換ユーティリティと往復恒等テスト
   - PDF単位⇄表示px の相互変換（軸反転・倍率・DPR）を実装
   - 確認: toPdf(toLayer(p)) ≈ p の往復恒等ユニットテストが通る
   - _Requirements: 2.4, 8.2_
