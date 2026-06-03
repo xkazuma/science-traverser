@@ -29,6 +29,12 @@ export { pdfjsLib }
 export const getDocument = pdfjsLib.getDocument
 export const GlobalWorkerOptions = pdfjsLib.GlobalWorkerOptions
 export const InvalidPDFException = pdfjsLib.InvalidPDFException
+// Render-cancellation marker (display_utils). `usePdfPageRender` cancels the
+// previous RenderTask on scale change; pdfjs rejects the cancelled task's
+// promise with this exception, which is normal flow — not an error — and is
+// swallowed. Surfacing it here lets the render composable detect it via
+// `instanceof` (with a `.name` fallback) without importing pdfjs-dist directly.
+export const RenderingCancelledException = pdfjsLib.RenderingCancelledException
 export const version = pdfjsLib.version
 
 export type {
