@@ -10,6 +10,114 @@ declare global {
   }
 }
 
+// jsdom does not implement IntersectionObserver, which `usePageVirtualizer`
+// uses to decide which pages are near-visible (Req 6.1/6.3/6.4). Provide a
+// controllable, test-only stub: every constructed observer registers its
+// callback and observed targets in a module-level registry so a test can fire
+// synthetic `IntersectionObserverEntry`s and drive the composable's
+// visible/active/release logic deterministically. Real browsers (and the Vite
+// build target) provide the genuine API, so this is purely a test shim.
+export interface IntersectionObserverStub {
+  readonly callback: IntersectionObserverCallback
+  readonly observed: Set<Element>
+  readonly root: Element | Document | null
+  readonly rootMargin: string
+  readonly thresholds: ReadonlyArray<number>
+}
+
+const intersectionObserverRegistry: IntersectionObserverStub[] = []
+
+/** Test helper: the most recently constructed IntersectionObserver stub. */
+export function lastIntersectionObserver(): IntersectionObserverStub {
+  const last = intersectionObserverRegistry.at(-1)
+  if (last === undefined) {
+    throw new Error('No IntersectionObserver has been constructed yet')
+  }
+  return last
+}
+
+/** Test helper: clear the IntersectionObserver registry between tests. */
+export function resetIntersectionObservers(): void {
+  intersectionObserverRegistry.length = 0
+}
+
+/**
+ * Test helper: build a synthetic `IntersectionObserverEntry` for `target`.
+ * Only the fields `usePageVirtualizer` reads are meaningful (`target`,
+ * `isIntersecting`, `intersectionRatio`); the rest are filled with inert,
+ * type-correct placeholders.
+ */
+export function makeIntersectionEntry(
+  target: Element,
+  isIntersecting: boolean,
+  intersectionRatio: number,
+): IntersectionObserverEntry {
+  const rect: DOMRectReadOnly = {
+    x: 0,
+    y: 0,
+    width: 0,
+    height: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    toJSON() {
+      return {}
+    },
+  }
+  return {
+    target,
+    isIntersecting,
+    intersectionRatio,
+    boundingClientRect: rect,
+    intersectionRect: rect,
+    rootBounds: rect,
+    time: 0,
+  }
+}
+
+if (!('IntersectionObserver' in globalThis)) {
+  class IntersectionObserverStubImpl implements IntersectionObserverStub {
+    readonly callback: IntersectionObserverCallback
+    readonly observed = new Set<Element>()
+    readonly root: Element | Document | null
+    readonly rootMargin: string
+    readonly thresholds: ReadonlyArray<number>
+
+    constructor(
+      callback: IntersectionObserverCallback,
+      options?: IntersectionObserverInit,
+    ) {
+      this.callback = callback
+      this.root = (options?.root as Element | Document | null) ?? null
+      this.rootMargin = options?.rootMargin ?? '0px'
+      const t = options?.threshold ?? 0
+      this.thresholds = Array.isArray(t) ? t : [t]
+      intersectionObserverRegistry.push(this)
+    }
+
+    observe(target: Element): void {
+      this.observed.add(target)
+    }
+
+    unobserve(target: Element): void {
+      this.observed.delete(target)
+    }
+
+    disconnect(): void {
+      this.observed.clear()
+    }
+
+    takeRecords(): IntersectionObserverEntry[] {
+      return []
+    }
+  }
+
+  ;(
+    globalThis as unknown as { IntersectionObserver: unknown }
+  ).IntersectionObserver = IntersectionObserverStubImpl
+}
+
 // jsdom does not implement ResizeObserver, which Vuetify's layout composables
 // (used by <v-app>) require. Provide a no-op stub so chrome components mount in
 // the test environment.

@@ -64,7 +64,7 @@
   - _Requirements: 8.1, 8.2, 8.3, 8.4_
   - _Boundary: PdfOverlayLayer_
   - _Depends: 1.4_
-- [ ] 3.4 仮想化 composable（プレースホルダ・可視判定・解放）
+- [x] 3.4 仮想化 composable（プレースホルダ・可視判定・解放）
   - 各ページ固有寸法×指定scaleでプレースホルダを算出し総量を正確化、近傍±Nのみ可視、遠方cleanup、ジャンプ用の絶対位置(offsetOf)、scale適用の再計算(recompute)、現在ページ追従
   - 注: recompute は「与えられた scale でプレースホルダを再算出」する役割。フィット倍率そのものの算出は 5.2 が担う
   - 確認: 多ページPDFで近傍ページのみ描画され、スクロール総量が全ページ分確保される
