@@ -5,7 +5,7 @@
   - パッケージ初期化、`@/` を src へのエイリアス設定、開発/ビルド/テストの各コマンドを用意
   - 起動確認: 空の App が dev で表示され、`pnpm build` と `pnpm test` が成功する
   - _Requirements: 2.1_
-- [ ] 1.2 (P) Vuetify 4 を外枠UI基盤として導入
+- [x] 1.2 (P) Vuetify 4 を外枠UI基盤として導入
   - vite-plugin-vuetify(autoImport) + @mdi/font、createVuetify 構成、ルートを <v-app> でラップ
   - 確認: Vuetify ボタン等が描画され、MDI アイコンが表示される
   - _Requirements: 7.5_
@@ -143,3 +143,7 @@
   - 確認: 上記シナリオが実機ブラウザで再現し、ビルドが成功する
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.2, 3.3, 4.1, 5.2, 5.4, 6.1, 7.3_
   - _Depends: 5.2_
+
+## Implementation Notes
+- pnpm 11 のビルドスクリプト承認ゲート対策として `pnpm-workspace.yaml` に `allowBuilds: { esbuild, vue-demi }` を設定済み（pnpm が install 時に再生成するため削除しない）。pnpm を使うタスクはこの前提で動く。
+- 解決バージョン: Vue 3.5.x / Vite 5.4.x / Vitest 2.1.x / Pinia 2.3.x / TypeScript 5.9.x。
