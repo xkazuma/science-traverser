@@ -11,7 +11,7 @@
   - _Requirements: 7.5_
   - _Boundary: plugins vuetify, App_
   - _Depends: 1.1_
-- [ ] 1.3 (P) pdfjs 境界モジュールとワーカー設定
+- [x] 1.3 (P) pdfjs 境界モジュールとワーカー設定
   - pdfjs を import する単一モジュールを用意し、ワーカーを ?url で解決（CDN固定しない）
   - 確認: 最小 PDF を読み込んでページ数が取得でき、ワーカーのバージョン不一致が出ない
   - _Requirements: 1.5_
@@ -146,4 +146,6 @@
 
 ## Implementation Notes
 - pnpm 11 のビルドスクリプト承認ゲート対策として `pnpm-workspace.yaml` に `allowBuilds: { esbuild, vue-demi }` を設定済み（pnpm が install 時に再生成するため削除しない）。pnpm を使うタスクはこの前提で動く。
-- 解決バージョン: Vue 3.5.x / Vite 5.4.x / Vitest 2.1.x / Pinia 2.3.x / TypeScript 5.9.x。
+- 解決バージョン: Vue 3.5.x / Vite 5.4.x / Vitest 2.1.x / Pinia 2.3.x / TypeScript 5.9.x / pdfjs-dist 6.0.x / Vuetify 4.1.x。
+- pdfjs-dist v6.0.227 は公開エントリから `PasswordException` を**エクスポートしない**（`InvalidPDFException` のみ）。タスク2.4のエラー写像はパスワード判定を `instanceof` ではなく `err.name === 'PasswordException'`（pdfjs 例外は name を持つ）で行うこと。
+- jsdom テストでは pdfjs v6 向けに `tests/setup.ts` が DOMMatrix と Uint8Array.toHex の環境 polyfill を提供（本番には載らない）。pdfjs を使うユニットテストはこの前提。`PDFDocumentProxy` に `destroy()` は無く `cleanup()` のみ。`destroy()` は loading task 側。
