@@ -73,3 +73,26 @@ if (typeof Uint8Array.prototype.toHex !== 'function') {
     writable: true,
   })
 }
+
+// jsdom 25's `Blob`/`File` do not implement the `Blob.prototype.arrayBuffer()`
+// method (nor `text()`/`stream()`), even though all browsers Vite targets do.
+// `useFileIntake` reads dropped/selected files via the standard
+// `file.arrayBuffer()` API, so provide a spec-faithful shim built on jsdom's
+// `FileReader` (which it does implement). Purely a test-environment polyfill.
+if (
+  typeof Blob !== 'undefined' &&
+  typeof Blob.prototype.arrayBuffer !== 'function'
+) {
+  Object.defineProperty(Blob.prototype, 'arrayBuffer', {
+    value(this: Blob): Promise<ArrayBuffer> {
+      return new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as ArrayBuffer)
+        reader.onerror = () => reject(reader.error)
+        reader.readAsArrayBuffer(this)
+      })
+    },
+    configurable: true,
+    writable: true,
+  })
+}

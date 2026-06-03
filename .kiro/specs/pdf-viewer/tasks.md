@@ -33,7 +33,7 @@
   - 確認: zoom クランプ・goToPage 範囲外無視・status 遷移のユニットテストが通る
   - _Requirements: 3.1, 3.5, 4.2_
   - _Depends: 2.1_
-- [ ] 2.3 (P) ファイル受け入れ（選択/D&D→ArrayBuffer・MIME検証）とテスト
+- [x] 2.3 (P) ファイル受け入れ（選択/D&D→ArrayBuffer・MIME検証）とテスト
   - 選択とドロップから ArrayBuffer 化、application/pdf 以外は invalid-type、外部送信なし
   - 確認: 非PDFが invalid-type になるユニットテストが通る
   - _Requirements: 1.1, 1.2, 1.4, 1.5_
