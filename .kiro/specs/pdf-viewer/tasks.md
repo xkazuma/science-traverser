@@ -77,7 +77,7 @@
   - _Requirements: 2.1, 2.4_
   - _Boundary: PdfPage, PdfCanvasLayer, PdfTextLayer_
   - _Depends: 3.1, 3.2, 3.3_
-- [ ] 3.6 スクロール容器（連続スクロール・ジャンプ着地・現在ページ追従）
+- [x] 3.6 スクロール容器（連続スクロール・ジャンプ着地・現在ページ追従）
   - 仮想化ホスト、pendingScrollTo監視→絶対位置へスクロール後クリア、スクロールでcurrentPage更新
   - 確認: 連続スクロールで描画され、未描画ページへのジャンプが正しい位置に着地し、現在ページ表示が追従する
   - _Requirements: 2.1, 3.2, 3.4_
