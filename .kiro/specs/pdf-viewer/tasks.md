@@ -39,7 +39,7 @@
   - _Requirements: 1.1, 1.2, 1.4, 1.5_
   - _Boundary: useFileIntake_
   - _Depends: 1.1_
-- [ ] 2.4 ドキュメント読み込み composable
+- [x] 2.4 ドキュメント読み込み composable
   - 読み込み・進捗(loadProgress)・エラー写像(password/corrupt/unknown)・破棄、ストア更新
   - 確認: 破損/パスワードPDFで status=error と種別が設定される（エラー写像のユニットテスト）
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
