@@ -28,7 +28,7 @@
 - [x] 2.1 型定義（ビュー状態・ステータス・エラー種別・将来用overlay型スタブ）
   - 確認: 型が strict でコンパイルし、annotations/layoutRegions/layoutGraph 型が予約として存在
   - _Requirements: 8.4_
-- [ ] 2.2 Pinia ストアとユニットテスト
+- [x] 2.2 Pinia ストアとユニットテスト
   - doc/view 状態、状態機械 idle→loading→ready|error、zoom クランプ、requestGoToPage 範囲外無視、markRaw 保持、pendingScrollTo
   - 確認: zoom クランプ・goToPage 範囲外無視・status 遷移のユニットテストが通る
   - _Requirements: 3.1, 3.5, 4.2_
