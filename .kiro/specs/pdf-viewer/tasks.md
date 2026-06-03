@@ -25,7 +25,7 @@
   - _Depends: 1.1_
 
 - [ ] 2. Core: 状態・型・読み込み
-- [ ] 2.1 型定義（ビュー状態・ステータス・エラー種別・将来用overlay型スタブ）
+- [x] 2.1 型定義（ビュー状態・ステータス・エラー種別・将来用overlay型スタブ）
   - 確認: 型が strict でコンパイルし、annotations/layoutRegions/layoutGraph 型が予約として存在
   - _Requirements: 8.4_
 - [ ] 2.2 Pinia ストアとユニットテスト
