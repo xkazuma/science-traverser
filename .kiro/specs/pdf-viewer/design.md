@@ -457,6 +457,8 @@ export interface PdfOverlaySlotProps {
 }
 ```
 - 層の寸法は `viewport.width/height`（px）に一致。フェーズ1は内容を描かない（8.4）。
+- 最前面の空オーバーレイ層は **`pointer-events: none`** とし、直下のテキスト層の選択（要件 2.3）を
+  妨げない。将来の対話的な子要素（注釈・領域等）は自身に `pointer-events: auto` を設定して有効化する。
 
 #### その他 UI（サマリ）
 

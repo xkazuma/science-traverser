@@ -81,6 +81,10 @@ onBeforeUnmount(() => {
 <style>
 .text-layer {
   color: transparent;
+  /* pdfjs 標準のテキスト層選択挙動（要件 2.3）。グリフは透明だが選択は可能。 */
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
 }
 .text-layer span,
 .text-layer br {

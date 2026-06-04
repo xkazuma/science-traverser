@@ -55,11 +55,15 @@ defineSlots<{
 
 // 層の箱は viewport 寸法（CSS px）に一致し、同一原点（0,0）に重なる（8.1）。
 // viewport プロップに反応する computed なので倍率変化で更新される（8.3）。
+// pointer-events:none — 最前面の空オーバーレイ層がポインタ操作を横取りして直下の
+// テキスト層の選択（要件 2.3）を妨げないよう、イベントを通過させる。将来の対話的な
+// 子要素（注釈等）は自身に pointer-events:auto を設定して個別に有効化する。
 const layerStyle = computed(() => ({
   position: 'absolute' as const,
   inset: 0,
   width: `${props.viewport.width}px`,
   height: `${props.viewport.height}px`,
+  pointerEvents: 'none' as const,
 }))
 
 // 現在の viewport にバインドした変換関数。viewport 差し替えで再生成される（8.3）。

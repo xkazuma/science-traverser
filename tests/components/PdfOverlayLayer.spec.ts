@@ -140,6 +140,14 @@ describe('components/PdfOverlayLayer (slot contract lock)', () => {
       // same-origin overlay: absolutely positioned at origin
       expect(el.style.position).toBe('absolute')
     })
+
+    it('does not intercept pointer events (so text selection passes through)', () => {
+      // 最前面の空オーバーレイ層は pointer-events:none で直下のテキスト層の選択
+      // （要件 2.3）を妨げない。回帰防止: auto に戻すとテキスト選択が壊れる。
+      const { wrapper } = mountWithCapture(vp1)
+      const el = wrapper.find('.overlay-layer').element as HTMLElement
+      expect(el.style.pointerEvents).toBe('none')
+    })
   })
 
   describe('8.3 — dims and converters track viewport/scale changes', () => {
