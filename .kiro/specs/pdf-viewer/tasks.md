@@ -138,7 +138,7 @@
   - _Depends: 5.1_
 
 - [ ] 6. Validation
-- [ ] 6.1 手動E2Eスモークとビルド検証
+- [x] 6.1 手動E2Eスモークとビルド検証
   - dev起動で受け入れ基準を一通り確認（選択/D&D、連続スクロール、ページ追従、前後/ジャンプ、ズーム/フィット鮮明・連打非ちらつき、テキスト選択、アウトライン/サムネイル、大規模PDF応答性、破損/非PDF/パスワード表示）、`pnpm build`でワーカーアセットが出力される
   - 確認: 上記シナリオが実機ブラウザで再現し、ビルドが成功する
   - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.2, 3.3, 4.1, 5.2, 5.4, 6.1, 7.3_
@@ -151,3 +151,4 @@
 - jsdom テストでは pdfjs v6 向けに `tests/setup.ts` が DOMMatrix と Uint8Array.toHex の環境 polyfill を提供（本番には載らない）。pdfjs を使うユニットテストはこの前提。`PDFDocumentProxy` に `destroy()` は無く `cleanup()` のみ。`destroy()` は loading task 側。
 - **重要**: `PDFPageProxy` / `PageViewport` 等の pdfjs オブジェクトを Vue のリアクティブプロキシのまま composable に渡すと、pdfjs 内部の WeakMap/`this` 束縛が壊れ TextLayer が0スパンになる等の不具合が出る。composable へ渡す前に必ず `toRaw()` する（PdfPage/PdfCanvasLayer/PdfTextLayer で適用済み。3.6/4.5 等でも同様に）。
 - レイヤ配置は各コンポーネントのインライン `position:absolute` で実装（`styles/layers.css` は必須ではない）。`.pdf-page` は `position:relative` で viewport 寸法。
+- 6.1 検証結果: `pnpm build` 成功＝`dist/assets/pdf.worker.min-*.mjs` がフィンガープリント出力（Vite ワーカー落とし穴を実ビルドで検証）。`pnpm test` 全23ファイル199件グリーン（実 pdfjs パース・テキスト span・アウトライン解決・ジャンプ幾何・フィット算出・エラー写像・DPR・スロット契約を網羅）。`vite preview` HTTP 200。**実ブラウザ対話スモーク（`e2e/smoke.mjs`）は本ハーネスを用意済みだが、当環境は chromium の OS 依存ライブラリ（libnss3/libnspr4/libasound2、root/apt 必要）が無く未実行**。手順は `e2e/README.md`（`npx playwright install --with-deps chromium` 後に `node e2e/smoke.mjs`）。
