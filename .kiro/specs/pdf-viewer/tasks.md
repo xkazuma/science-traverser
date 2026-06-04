@@ -124,7 +124,7 @@
   - _Depends: 4.4, 4.5_
 
 - [ ] 5. Integration: 全体結線・フィット
-- [ ] 5.1 ルート画面オーケストレーション
+- [x] 5.1 ルート画面オーケストレーション
   - App(<v-app>)配下でPdfViewerがstatusに応じLoading/Error/Viewport/Sidebar/Toolbar/DropZoneを結線、状態出し分けのコンポーネントテスト
   - 確認: 起動→ファイル選択→描画→ナビの一連が一画面で通しで動く
   - _Requirements: 2.1, 7.5_

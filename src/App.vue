@@ -1,19 +1,16 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+/**
+ * 薄いルートシェル（design.md「App.vue ... <v-app> でラップし PdfViewer を載せる」）。
+ *
+ * Vuetify がアプリケーションのクロームを提供するため `<v-app>` でツリーを包み、
+ * その配下に画面オーケストレータ `PdfViewer` を載せるだけに留める。実際の結線・
+ * status 出し分け・読み込みライフサイクルは `PdfViewer`（task 5.1）が所有する。
+ */
+import PdfViewer from '@/components/PdfViewer.vue'
+</script>
 
 <template>
-  <!--
-    Thin root shell. Vuetify provides the application chrome and must wrap the
-    tree in <v-app>. The <v-btn> + MDI icon below only prove that Vuetify and
-    @mdi/font are wired; real chrome (toolbar/sidebar/etc.) arrives in later
-    tasks. PDF render layers stay outside Vuetify.
-  -->
   <v-app>
-    <main>
-      <h1>PDF Viewer</h1>
-      <v-btn prepend-icon="mdi-file-pdf-box">
-        <v-icon icon="mdi-file-pdf-box" />
-        Open PDF
-      </v-btn>
-    </main>
+    <PdfViewer />
   </v-app>
 </template>
