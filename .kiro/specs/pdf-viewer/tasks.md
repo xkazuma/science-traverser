@@ -104,7 +104,7 @@
   - _Requirements: 1.2, 1.3_
   - _Boundary: PdfDropZone_
   - _Depends: 2.3_
-- [ ] 4.4 (P) アウトライン取得 composable
+- [x] 4.4 (P) アウトライン取得 composable
   - しおり取得、移動先をページ番号へ解決、無い場合は空
   - 確認: アウトライン有PDFで木が得られ、無い場合は空配列になる
   - _Requirements: 5.1, 5.2, 5.5_
