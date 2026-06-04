@@ -54,8 +54,15 @@ const pages = shallowRef<Map<number, PDFPageProxy>>(new Map())
 // 仮想化ホスト。dimensions（Ref）と現在倍率から placeholders / visiblePages /
 // activePage / offsetOf を提供する。
 const virtualizer = usePageVirtualizer(dimensions, store.scale)
-const { placeholders, visiblePages, activePage, observe, offsetOf, recompute } =
-  virtualizer
+const {
+  placeholders,
+  visiblePages,
+  activePage,
+  observe,
+  releaseFar,
+  offsetOf,
+  recompute,
+} = virtualizer
 
 // 観測登録済みのプレースホルダ要素（重複 observe を避ける）。
 const observed = new Set<number>()
@@ -210,6 +217,26 @@ watch(
 // スクロール追従（3.2）。最も可視なページを現在ページへ反映する。
 watch(activePage, (page) => {
   store.setCurrentPage(page)
+})
+
+/**
+ * 遠方ページのリソース解放（要件 6.4）。一度でも可視になった（=デコードされ得た）
+ * ページ番号を `decodedPages` に記録し、可視ウィンドウから外れたページ
+ * （`releaseFar()` が返す観測中・非可視ページ）の `PDFPageProxy.cleanup()` を呼んで
+ * デコード済みリソースを明示解放する。far ページは v-if で PdfPage が unmount 済み
+ * （canvas/text 描画はキャンセル済み）なので安全。proxy 自体は再利用可能で、
+ * スクロール戻りで再デコードされる。記録から除外することで同一スクロール中の
+ * 冗長な cleanup 呼び出しを避ける。
+ */
+const decodedPages = new Set<number>()
+watch(visiblePages, (now) => {
+  for (const n of now) decodedPages.add(n)
+  const far = releaseFar()
+  for (const n of far) {
+    if (!decodedPages.has(n)) continue
+    pages.value.get(n)?.cleanup()
+    decodedPages.delete(n)
+  }
 })
 
 onBeforeUnmount(() => {

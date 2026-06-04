@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url'
 
 import { mount } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import PdfViewport from '@/components/PdfViewport.vue'
 import { getDocument, GlobalWorkerOptions } from '@/lib/pdf/pdfjs'
@@ -219,6 +219,54 @@ describe('components/PdfViewport (スクロール容器・仮想化ホスト)', 
       )
       await wrapper.vm.$nextTick()
       expect(store.currentPage).toBe(3)
+    })
+  })
+
+  describe('6.4 — 可視ウィンドウから外れたページの pdfjs リソースを解放する', () => {
+    it('可視だったページがスクロールで非可視になると page.cleanup() が呼ばれる', async () => {
+      // pdfjs は同一ドキュメント内のページ proxy をキャッシュするため、
+      // doc.getPage(2) は PdfViewport が保持するのと同一インスタンスを返す。
+      const page2 = await doc.getPage(2)
+      const cleanupSpy = vi.spyOn(page2, 'cleanup')
+
+      try {
+        const { wrapper } = await mountReady()
+        const placeholders = wrapper.findAll('.pdf-placeholder')
+        const observer = lastIntersectionObserver()
+
+        // まずページ 1〜3 を可視にする（ページ 2 が visiblePages に入り decoded 扱い）。
+        observer.callback(
+          [
+            makeIntersectionEntry(placeholders[0].element, true, 0.4),
+            makeIntersectionEntry(placeholders[1].element, true, 0.8),
+            makeIntersectionEntry(placeholders[2].element, true, 0.3),
+          ],
+          observer as unknown as IntersectionObserver,
+        )
+        await wrapper.vm.$nextTick()
+
+        // ページ 2 が可視ウィンドウから外れる（1 と 3 のみ交差、2 は非交差）。
+        observer.callback(
+          [
+            makeIntersectionEntry(placeholders[0].element, true, 0.6),
+            makeIntersectionEntry(placeholders[1].element, false, 0),
+            makeIntersectionEntry(placeholders[2].element, true, 0.5),
+          ],
+          observer as unknown as IntersectionObserver,
+        )
+        await wrapper.vm.$nextTick()
+
+        // ページ 2 のリソースが明示解放される（遠方解放パス、要件 6.4）。
+        await waitFor(() => cleanupSpy.mock.calls.length > 0)
+        expect(cleanupSpy).toHaveBeenCalled()
+
+        // クリーンアップ後にアンマウントし、in-flight な getPage/render を
+        // afterAll の loadingTask.destroy 前に沈める（unhandled rejection 回避）。
+        wrapper.unmount()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      } finally {
+        cleanupSpy.mockRestore()
+      }
     })
   })
 
