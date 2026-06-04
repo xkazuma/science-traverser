@@ -16,6 +16,7 @@
  */
 import { computed } from 'vue'
 
+import PdfAnnotationLayer from '@/components/PdfAnnotationLayer.vue'
 import PdfCanvasLayer from '@/components/PdfCanvasLayer.vue'
 import PdfOverlayLayer from '@/components/PdfOverlayLayer.vue'
 import PdfTextLayer from '@/components/PdfTextLayer.vue'
@@ -44,9 +45,11 @@ const pageStyle = computed(() => ({
 
 <template>
   <div class="pdf-page" :style="pageStyle">
-    <!-- 描画順（背面→前面）: キャンバス → テキスト → オーバーレイ。全層が同一原点。 -->
+    <!-- 描画順（背面→前面）: キャンバス → テキスト → 注釈（リンク） → オーバーレイ。
+         全層が同一原点。注釈層はテキスト層の上・オーバーレイ層の下（要件 9.4）。 -->
     <PdfCanvasLayer :page="props.page" :scale="props.scale" />
     <PdfTextLayer :page="props.page" :viewport="viewport" />
+    <PdfAnnotationLayer :page="props.page" :viewport="viewport" />
     <PdfOverlayLayer :viewport="viewport" />
   </div>
 </template>

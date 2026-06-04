@@ -40,6 +40,13 @@ export const RenderingCancelledException = pdfjsLib.RenderingCancelledException
 // then `.render()`), not the removed `renderTextLayer()` helper. Surfacing it
 // here keeps pdfjs-dist behind this single boundary (Req 2.3).
 export const TextLayer = pdfjsLib.TextLayer
+// Link / cross-reference annotation layer (display/annotation_layer). Requirement
+// 9 surfaces clickable PDF link annotations (internal GoTo cross-references +
+// external URLs). `usePdfAnnotationLayer` builds the per-page link overlay via
+// the v6 `AnnotationLayer` *class* (`new AnnotationLayer({...})` then
+// `.render({ annotations })`). Surfacing it here keeps pdfjs-dist behind this
+// single boundary (Req 9.1).
+export const AnnotationLayer = pdfjsLib.AnnotationLayer
 export const version = pdfjsLib.version
 
 export type {

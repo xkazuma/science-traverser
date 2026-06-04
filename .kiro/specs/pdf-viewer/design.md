@@ -142,7 +142,9 @@ graph TB
 │   │   ├── usePdfOutline.ts         # アウトライン取得・移動先解決
 │   │   ├── usePageVirtualizer.ts    # プレースホルダ高さ確保 + 近傍描画 + cleanup
 │   │   ├── useFileIntake.ts         # 選択/D&D → ArrayBuffer、MIME検証
-│   │   └── useZoomShortcuts.ts      # ブラウザズーム上書き（Ctrl+/-/0・Ctrl+ホイール）→ PDF ズーム
+│   │   ├── useZoomShortcuts.ts      # ブラウザズーム上書き（Ctrl+/-/0・Ctrl+ホイール）→ PDF ズーム
+│   │   ├── usePdfLinkService.ts     # IPDFLinkService 最小実装（内部 dest→requestGoToPage、外部URL）
+│   │   └── usePdfAnnotationLayer.ts # 注釈層構築（page.getAnnotations + AnnotationLayer + linkService）
 │   ├── stores/
 │   │   └── pdfStore.ts              # doc/view 状態 + 予約スライス
 │   ├── components/
@@ -154,6 +156,7 @@ graph TB
 │   │   ├── PdfPage.vue              # 3層スタック
 │   │   ├── PdfCanvasLayer.vue       # ラスタ描画
 │   │   ├── PdfTextLayer.vue         # 選択可能テキスト層
+│   │   ├── PdfAnnotationLayer.vue   # リンク注釈層（内部相互参照/外部URL、要件9）
 │   │   ├── PdfOverlayLayer.vue      # 拡張点（スコープ付きスロット）
 │   │   ├── PdfThumbnail.vue         # サムネイル1枚
 │   │   ├── PdfLoadingState.vue      # ローディング/進捗/初期案内
@@ -259,6 +262,10 @@ sequenceDiagram
 | 7.3, 7.4 | 破損/パスワード | PdfErrorState, usePdfDocument | `PdfError` | 読み込みフロー |
 | 7.5 | 初期案内 | PdfLoadingState | `PdfState` | — |
 | 8.1, 8.4 | 空オーバーレイ常設 | PdfPage, PdfOverlayLayer | `OverlaySlot` | — |
+| 9.1 | リンク注釈の表示 | PdfAnnotationLayer, usePdfAnnotationLayer | `AnnotationLayer` | — |
+| 9.2 | 内部リンクで移動先へジャンプ | usePdfLinkService, usePdfOutline, pdfStore | `LinkService`, `PdfState` | ジャンプフロー |
+| 9.3 | 外部URLを新タブで開く | usePdfLinkService | `LinkService` | — |
+| 9.4 | リンク層の位置整合・pointer-events 分離 | PdfAnnotationLayer | `AnnotationLayer` | — |
 
 ## Components and Interfaces
 
@@ -467,7 +474,14 @@ export interface PdfOverlaySlotProps {
   PdfDropZone のドラッグ視覚FB、将来のダイアログ。Material 部品（`VToolbar`/`VBtn`/`VTextField`/
   `VBtnToggle`/`VTooltip`/`VNavigationDrawer`/`VList`/`VTreeview`/`VProgressLinear`/`VAlert` 等）を用いる。
 - **render（Vuetify 不使用・素の DOM/canvas）**: PdfViewport, PdfPage, PdfCanvasLayer, PdfTextLayer,
-  PdfOverlayLayer。viewport 座標での精密配置のため Vuetify を挟まない。
+  PdfAnnotationLayer, PdfOverlayLayer。viewport 座標での精密配置のため Vuetify を挟まない。
+  **リンク注釈層（要件 9）**: スタックは canvas → text → **annotation** → overlay。`PdfAnnotationLayer` は
+  `usePdfAnnotationLayer`（`page.getAnnotations()` + pdfjs `AnnotationLayer`、viewport は `clone({dontFlip:true})`、
+  `renderForms:false`）でリンク注釈を描画し、`usePdfLinkService`（IPDFLinkService 最小実装）を渡す。内部 dest は
+  `goToDestination` で `usePdfOutline.resolveDest` により 1-origin ページへ解決し `store.requestGoToPage`（既存
+  ジャンプ再利用）、外部 URL は新タブ（`rel="noopener noreferrer"`）。pdfjs 公式 `.annotationLayer` CSS を移植し、
+  コンテナは `pointer-events:none`／リンク `<a>` のみ `pointer-events:auto`（リンク以外は直下テキスト選択を妨げない・要件 2.3）、
+  `--total-scale-factor` で位置整合（要件 9.4）。`pdfjs-dist` は境界 `@/lib/pdf/pdfjs` 経由（`AnnotationLayer` を再エクスポート）。
 
 - **PdfViewer**: 全体オーケストレーション。status に応じて Loading/Error/Viewport を出し分け。`<v-app>` 配下。
   **アプリシェルの高さ規約（要件 5.6）**: ルート（v-layout）を**固定高 `100vh` の definite な
