@@ -1,0 +1,163 @@
+# Implementation Plan
+
+- [ ] 1. Foundation: プロジェクト基盤・UI基盤・PDF境界
+- [x] 1.1 プロジェクト雛形を作成（Vite + Vue 3 + TypeScript strict + Pinia + Vitest）
+  - パッケージ初期化、`@/` を src へのエイリアス設定、開発/ビルド/テストの各コマンドを用意
+  - 起動確認: 空の App が dev で表示され、`pnpm build` と `pnpm test` が成功する
+  - _Requirements: 2.1_
+- [x] 1.2 (P) Vuetify 4 を外枠UI基盤として導入
+  - vite-plugin-vuetify(autoImport) + @mdi/font、createVuetify 構成、ルートを <v-app> でラップ
+  - 確認: Vuetify ボタン等が描画され、MDI アイコンが表示される
+  - _Requirements: 7.5_
+  - _Boundary: plugins vuetify, App_
+  - _Depends: 1.1_
+- [x] 1.3 (P) pdfjs 境界モジュールとワーカー設定
+  - pdfjs を import する単一モジュールを用意し、ワーカーを ?url で解決（CDN固定しない）
+  - 確認: 最小 PDF を読み込んでページ数が取得でき、ワーカーのバージョン不一致が出ない
+  - _Requirements: 1.5_
+  - _Boundary: lib pdf pdfjs_
+  - _Depends: 1.1_
+- [x] 1.4 (P) 座標変換ユーティリティと往復恒等テスト
+  - PDF単位⇄表示px の相互変換（軸反転・倍率・DPR）を実装
+  - 確認: toPdf(toLayer(p)) ≈ p の往復恒等ユニットテストが通る
+  - _Requirements: 2.4, 8.2_
+  - _Boundary: lib pdf coordinates_
+  - _Depends: 1.1_
+
+- [ ] 2. Core: 状態・型・読み込み
+- [x] 2.1 型定義（ビュー状態・ステータス・エラー種別・将来用overlay型スタブ）
+  - 確認: 型が strict でコンパイルし、annotations/layoutRegions/layoutGraph 型が予約として存在
+  - _Requirements: 8.4_
+- [x] 2.2 Pinia ストアとユニットテスト
+  - doc/view 状態、状態機械 idle→loading→ready|error、zoom クランプ、requestGoToPage 範囲外無視、markRaw 保持、pendingScrollTo
+  - 確認: zoom クランプ・goToPage 範囲外無視・status 遷移のユニットテストが通る
+  - _Requirements: 3.1, 3.5, 4.2_
+  - _Depends: 2.1_
+- [x] 2.3 (P) ファイル受け入れ（選択/D&D→ArrayBuffer・MIME検証）とテスト
+  - 選択とドロップから ArrayBuffer 化、application/pdf 以外は invalid-type、外部送信なし
+  - 確認: 非PDFが invalid-type になるユニットテストが通る
+  - _Requirements: 1.1, 1.2, 1.4, 1.5_
+  - _Boundary: useFileIntake_
+  - _Depends: 1.1_
+- [x] 2.4 ドキュメント読み込み composable
+  - 読み込み・進捗(loadProgress)・エラー写像(password/corrupt/unknown)・破棄、ストア更新
+  - 確認: 破損/パスワードPDFで status=error と種別が設定される（エラー写像のユニットテスト）
+  - _Requirements: 7.1, 7.2, 7.3, 7.4_
+  - _Depends: 1.3, 2.2_
+
+- [ ] 3. Core: 描画・3層スタック・仮想化
+- [x] 3.1 (P) ページ描画 composable（DPR対応・再描画キャンセル）
+  - バッキングストアをDPR倍、CSSボックスはviewport寸法、前回描画タスクをcancelしキャンセル例外を握り潰す
+  - 確認: ページが鮮明に描画され、倍率の連続変更で前回描画がキャンセルされる
+  - _Requirements: 2.2, 4.1_
+  - _Boundary: usePdfPageRender_
+  - _Depends: 1.3, 1.4_
+- [x] 3.2 (P) テキスト層 composable
+  - テキスト層をキャンバスと同一原点・同寸で構築、選択可能
+  - 確認: 描画ページ上でテキストを選択・コピーできる
+  - _Requirements: 2.3_
+  - _Boundary: usePdfTextLayer_
+  - _Depends: 1.3_
+- [x] 3.3 (P) オーバーレイ層コンポーネントとスロット契約ロックテスト
+  - 同一原点の空オーバーレイ層、viewport と座標変換関数をスコープ付きスロットで公開、フェーズ1は内容なし
+  - 確認: スロットへ viewport と変換関数が渡り、層の寸法が viewport 寸法に一致するコンポーネントテストが通る
+  - _Requirements: 8.1, 8.2, 8.3, 8.4_
+  - _Boundary: PdfOverlayLayer_
+  - _Depends: 1.4_
+- [x] 3.4 仮想化 composable（プレースホルダ・可視判定・解放）
+  - 各ページ固有寸法×指定scaleでプレースホルダを算出し総量を正確化、近傍±Nのみ可視、遠方cleanup、ジャンプ用の絶対位置(offsetOf)、scale適用の再計算(recompute)、現在ページ追従
+  - 注: recompute は「与えられた scale でプレースホルダを再算出」する役割。フィット倍率そのものの算出は 5.2 が担う
+  - 確認: 多ページPDFで近傍ページのみ描画され、スクロール総量が全ページ分確保される
+  - _Requirements: 2.1, 6.1, 6.2, 6.3, 6.4_
+  - _Boundary: usePageVirtualizer_
+  - _Depends: 2.2_
+- [x] 3.5 ページ3層スタックコンポーネント
+  - キャンバス層・テキスト層・オーバーレイ層を同一原点で重ねる
+  - 確認: 1ページがキャンバス+選択テキスト+空オーバーレイの重なりで表示される
+  - _Requirements: 2.1, 2.4_
+  - _Boundary: PdfPage, PdfCanvasLayer, PdfTextLayer_
+  - _Depends: 3.1, 3.2, 3.3_
+- [x] 3.6 スクロール容器（連続スクロール・ジャンプ着地・現在ページ追従）
+  - 仮想化ホスト、pendingScrollTo監視→絶対位置へスクロール後クリア、スクロールでcurrentPage更新
+  - 確認: 連続スクロールで描画され、未描画ページへのジャンプが正しい位置に着地し、現在ページ表示が追従する
+  - _Requirements: 2.1, 3.2, 3.4_
+  - _Boundary: PdfViewport_
+  - _Depends: 3.4, 3.5_
+
+- [ ] 4. Core: chrome UI（Vuetify）
+- [x] 4.1 (P) ツールバー（開く・前後・ジャンプ・ズーム・フィット操作・ページ数）
+  - Vuetify部品で構成、操作はstore action/emitのみ、現在ページ/総数表示、範囲・倍率上下限でボタン無効化、フィット選択でfitMode設定、操作のコンポーネントテスト
+  - 注: フィットの実描画倍率算出は 5.2 が担う。本タスクはフィット選択の発火まで
+  - 確認: 前後/ジャンプ/ズーム/フィット選択が正しいstore更新を起こし、境界でボタンが無効化される
+  - _Requirements: 3.1, 3.3, 3.4, 4.1, 4.3, 4.4_
+  - _Boundary: PdfToolbar_
+  - _Depends: 2.2_
+- [x] 4.2 (P) ローディング/エラー/初期案内
+  - 進捗バー/スピナー、破損・パスワード・非PDFのメッセージ、未読み込み時の案内
+  - 確認: loading/error/idle の各状態で対応表示が出る
+  - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
+  - _Boundary: PdfLoadingState, PdfErrorState_
+  - _Depends: 2.2_
+- [x] 4.3 (P) ドロップゾーン（全面D&D・ドラッグ視覚FB）
+  - 全面ドロップ、ドラッグ中のオーバーレイ表示、受け入れはファイル受け入れ経由
+  - 確認: ファイルをドラッグするとFBが出て、ドロップで読み込みが始まる
+  - _Requirements: 1.2, 1.3_
+  - _Boundary: PdfDropZone_
+  - _Depends: 2.3_
+- [x] 4.4 (P) アウトライン取得 composable
+  - しおり取得、移動先をページ番号へ解決、無い場合は空
+  - 確認: アウトライン有PDFで木が得られ、無い場合は空配列になる
+  - _Requirements: 5.1, 5.2, 5.5_
+  - _Boundary: usePdfOutline_
+  - _Depends: 1.3_
+- [x] 4.5 (P) サムネイル一覧コンポーネント
+  - 各ページの縮小描画（ページ描画compを小倍率で利用）、仮想スクロールで一覧化、選択で requestGoToPage
+  - 確認: 全ページのサムネイルが一覧表示され、選択で該当ページへジャンプする
+  - _Requirements: 5.3, 5.4_
+  - _Boundary: PdfThumbnail_
+  - _Depends: 3.1, 3.4_
+- [x] 4.6 サイドバー（アウトライン木 + サムネイル一覧の統合）
+  - アウトライン木を表示し選択で requestGoToPage、サムネイル一覧を内包、アウトライン無し表示
+  - 確認: アウトライン選択でジャンプし、アウトライン無しの場合はその旨を表示、サムネイルが並ぶ
+  - _Requirements: 5.1, 5.2, 5.5_
+  - _Boundary: PdfSidebar_
+  - _Depends: 4.4, 4.5_
+
+- [ ] 5. Integration: 全体結線・フィット
+- [x] 5.1 ルート画面オーケストレーション
+  - App(<v-app>)配下でPdfViewerがstatusに応じLoading/Error/Viewport/Sidebar/Toolbar/DropZoneを結線、状態出し分けのコンポーネントテスト
+  - 確認: 起動→ファイル選択→描画→ナビの一連が一画面で通しで動く
+  - _Requirements: 2.1, 7.5_
+  - _Boundary: PdfViewer, App_
+  - _Depends: 3.6, 4.1, 4.2, 4.3, 4.6_
+- [x] 5.2 ズーム/フィット結線（基準計算・リサイズ・再描画）
+  - フィット倍率をコンテナ幅基準で算出（width=最広ページが幅に収まる、page=最広/最高ページが領域に収まる単一scale）、scale/fitMode変更とResizeObserverでの変化検知時に仮想化の再計算と再描画を起こす
+  - 注: フィット倍率算出の唯一の所在地。本タスクが scale を確定し 3.4 の再計算へ渡す
+  - 確認: 幅/ページ全体フィットが正しい倍率で描画され、ウィンドウリサイズで再計算される
+  - _Requirements: 4.1, 4.3, 4.4, 4.5_
+  - _Depends: 5.1_
+
+- [ ] 6. Validation
+- [x] 6.1 手動E2Eスモークとビルド検証
+  - dev起動で受け入れ基準を一通り確認（選択/D&D、連続スクロール、ページ追従、前後/ジャンプ、ズーム/フィット鮮明・連打非ちらつき、テキスト選択、アウトライン/サムネイル、大規模PDF応答性、破損/非PDF/パスワード表示）、`pnpm build`でワーカーアセットが出力される
+  - 確認: 上記シナリオが実機ブラウザで再現し、ビルドが成功する
+  - _Requirements: 1.1, 1.2, 1.3, 2.1, 2.2, 2.3, 3.2, 3.3, 4.1, 5.2, 5.4, 6.1, 7.3_
+  - _Depends: 5.2_
+
+## Implementation Notes
+- pnpm 11 のビルドスクリプト承認ゲート対策として `pnpm-workspace.yaml` に `allowBuilds: { esbuild, vue-demi }` を設定済み（pnpm が install 時に再生成するため削除しない）。pnpm を使うタスクはこの前提で動く。
+- 解決バージョン: Vue 3.5.x / Vite 5.4.x / Vitest 2.1.x / Pinia 2.3.x / TypeScript 5.9.x / pdfjs-dist 6.0.x / Vuetify 4.1.x。
+- pdfjs-dist v6.0.227 は公開エントリから `PasswordException` を**エクスポートしない**（`InvalidPDFException` のみ）。タスク2.4のエラー写像はパスワード判定を `instanceof` ではなく `err.name === 'PasswordException'`（pdfjs 例外は name を持つ）で行うこと。
+- jsdom テストでは pdfjs v6 向けに `tests/setup.ts` が DOMMatrix と Uint8Array.toHex の環境 polyfill を提供（本番には載らない）。pdfjs を使うユニットテストはこの前提。`PDFDocumentProxy` に `destroy()` は無く `cleanup()` のみ。`destroy()` は loading task 側。
+- **重要**: `PDFPageProxy` / `PageViewport` 等の pdfjs オブジェクトを Vue のリアクティブプロキシのまま composable に渡すと、pdfjs 内部の WeakMap/`this` 束縛が壊れ TextLayer が0スパンになる等の不具合が出る。composable へ渡す前に必ず `toRaw()` する（PdfPage/PdfCanvasLayer/PdfTextLayer で適用済み。3.6/4.5 等でも同様に）。
+- レイヤ配置は各コンポーネントのインライン `position:absolute` で実装（`styles/layers.css` は必須ではない）。`.pdf-page` は `position:relative` で viewport 寸法。
+- 事後修正（要件 5.6/5.7、kiro-debug 起点）: サイドバーと本文のスクロール連動バグを修正。根本原因は `.pdf-viewport` が `overflow:auto` でも高さ未指定で内部スクロールが成立せず、スクロールがウィンドウ/レイアウトへ抜けて permanent ドロワーを連動させていたこと。修正＝v-layout に定高 `100vh` アンカーを置き v-main→DropZone→PdfViewport を `height:100%` 連鎖で bounded 化（v-main は `overflow:hidden`）。あわせて R5.7「現在ページのアウトライン強調」（`pageIndex<=currentPage` 最大のしおりを `is-current`、自動スクロール追従なし）を追加。jsdom はレイアウト計算が無いため 5.6 の回帰ガードは `e2e/smoke.mjs` に置く（ユニットでは高さクラスの有無しか見られず空検証になるため）。
+- 事後変更（要件 5.8、kiro-debug＝SPEC_CONFLICT 起点）: ユーザー要望により R5.7 の「自動スクロール追従なし」を反転。R5.7 を改訂し R5.8「強調行が表示領域外のとき、最後の強調行が見えるまでアウトライン領域のみ自動スクロール（本文は動かさない）」を追加。実装＝`PdfSidebar` ルートで `activePageIndex` 変化を watch → nextTick → `outlineRoot` 内の最後の `.is-current` へ `scrollIntoView({block:'nearest'})`（jsdom 非実装のため存在ガード付き）。5.8 の実スクロールはブラウザ専用＝ユニットは scrollIntoView 呼び出しで検証、実挙動は手動/将来の Playwright（しおり付き長尺 PDF）で確認。
+- 事後修正（要件 2.5、kiro-debug 起点）: Fit-page 等でページ幅が表示領域より狭いとき左寄せ（右余白だけ大）だった問題を、プレースホルダの `left` を `max(0px, calc(50% - 幅/2))` に変更して水平中央揃え（左右余白均等）に修正。広いとき（ズームイン）は 0 に張り付き横スクロール従来どおり。jsdom は `max(calc())` を読み戻しで変形するため、回帰テストは式要素（`calc(50% - 幅/2px)` を含む・`0px` でない）で検証。
+- 事後追加（要件 3.6 / 4.6 / 5.5改訂、kiro-debug 起点）: ①未読込時のページ表示を「0 / 0」に（PdfToolbar、numPages=0 のとき現在ページ表示を 0）。②アウトライン未取得時はアウトラインタブ/ペインを `v-if="hasOutline"` で非表示にしサムネイルのみ・既定タブをサムネイルに（PdfSidebar、「ありません」表示は廃止）。③ブラウザ既定ズームを上書きしPDFズームへ割当（新規 `useZoomShortcuts`：window keydown Ctrl/⌘+`=`/`+`/`-`/`0` と wheel `{passive:false}` Ctrl/⌘+deltaY を preventDefault、`status==='ready'` のみ作動、PdfViewer で配線、アンマウントで解除）。注: Ctrl+ホイールは確実に抑止可、キーボードのズーム抑止はブラウザ依存（best-effort）。
+- 事後修正（サムネイル空画像バグ、kiro-debug 起点）: PdfThumbnail が `usePdfPageRender()` を**1インスタンス共有**しており、この composable は `render()` 毎に直前タスクをキャンセルする（要件4.1）ため、可視窓の複数サムネイルが相互キャンセルして最後の1枚以外が空になっていた。修正＝**ページ番号ごとに独立した描画インスタンス**（`Map<number, UsePdfPageRender>` + `rendererFor()`、純粋ファクトリなので setup 外生成も安全）。アンマウントで全インスタンス cancel。回帰テスト＝「可視ページ数ぶんのインスタンスが作られる（共有なら1）」で固定（mutation で 3→1 失敗を確認）。**教訓: 「前回キャンセル」型 composable は1要素に1インスタンス。複数を同時描画する箇所で共有しない。**
+- 事後追加（要件 5.9、kiro-debug 起点）: ドロワーを `permanent` から `v-model="drawerOpen"`（`temporary` 無し＝レイアウトドロワーのままスライド遷移）に変更。`drawerOpen` 初期 false、`reloadOutline` 開始で false・アウトライン読込完了＋`nextTick` 後に true でスライドイン。PdfViewport は status=ready で同期マウントされ reloadOutline は非同期のため、PDF 本文が先・ドロワーが後に出る。回帰テスト＝遅延 loadMock で「読込中は `.v-navigation-drawer--active` 無し→完了後に有り」。Vuetify4 の開状態クラスは `v-navigation-drawer--active`（model-value 連動）。
+- 事後修正（テキスト層の白字オーバーレイ、kiro-debug 起点）: `PdfTextLayer.vue` にスタイルが無く、pdfjs v6 TextLayer の span グリフが既定色（白）で可視のまま canvas に重なっていた。pdfjs はグリフ色を設定しない仕様のため、消費側で透明化が必須。非 scoped `<style>` で `.text-layer span/br { color: transparent !important }`（+ `::selection` ハイライト）を追加し「不可視・選択可能」（R2.3 維持）を実現。視覚は jsdom 検証不可＝既存の span/textContent テストで層・選択の存続を担保し、見た目はブラウザ確認。**教訓: pdfjs テキスト層は消費側でグリフ透明化 CSS が必須。**
+- 事後修正（テキスト選択不可、kiro-debug 起点）: 3層スタック最前面の空オーバーレイ層 `.overlay-layer`（viewport 全面・既定 `pointer-events:auto`）がドラッグを横取りし、直下テキスト層の選択（要件2.3）を妨げていた。修正＝`PdfOverlayLayer` の層スタイルに `pointer-events:none`（インラインで testable）を追加してイベントを通過、テキスト層に `user-select:text`/`cursor:text` を補完（pdfjs 標準）。回帰＝オーバーレイ層が `pointer-events:none` であること（auto に戻すと失敗を実証）。**教訓: テキスト層より前面の層は `pointer-events:none`、対話的子要素のみ `auto` でオプトイン。**
+- 事後完成（要件 6.4、validate-impl の PARTIAL 解消）: 未結線だった `usePageVirtualizer.releaseFar()` を `PdfViewport` に結線。`watch(visiblePages)` で可視化したページを `decodedPages` に記録し、可視ウィンドウから外れた（`releaseFar()` が返す）ページの `PDFPageProxy.cleanup()` を呼んでデコード済みリソースを明示解放（`decodedPages` で冗長 cleanup 回避）。far ページは v-if で PdfPage unmount 済み（render キャンセル済み）かつ `releaseFar()` は可視ページを除外するため安全。スクロール戻り/ジャンプ時は PdfPage 再マウントで再デコード。これで 6.4 が COMPLETE。
+- 6.1 検証結果: `pnpm build` 成功＝`dist/assets/pdf.worker.min-*.mjs` がフィンガープリント出力（Vite ワーカー落とし穴を実ビルドで検証）。`pnpm test` 全23ファイル199件グリーン（実 pdfjs パース・テキスト span・アウトライン解決・ジャンプ幾何・フィット算出・エラー写像・DPR・スロット契約を網羅）。`vite preview` HTTP 200。**実ブラウザ対話スモーク（`e2e/smoke.mjs`）は本ハーネスを用意済みだが、当環境は chromium の OS 依存ライブラリ（libnss3/libnspr4/libasound2、root/apt 必要）が無く未実行**。手順は `e2e/README.md`（`npx playwright install --with-deps chromium` 後に `node e2e/smoke.mjs`）。
