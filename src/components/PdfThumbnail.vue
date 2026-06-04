@@ -209,6 +209,12 @@ onBeforeUnmount(() => {
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  /* スクロール機能は維持しつつブラウザ標準スクロールバーを非表示にする。 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* 旧 Edge / IE */
+}
+.pdf-thumbnail-list::-webkit-scrollbar {
+  display: none; /* WebKit (Chrome/Safari) */
 }
 .pdf-thumbnail-spacer {
   position: relative;

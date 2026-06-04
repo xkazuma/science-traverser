@@ -267,6 +267,12 @@ function selectNode(node: OutlineNode): void {
 .pdf-sidebar-pane {
   height: 100%;
   overflow-y: auto;
+  /* スクロール機能は維持しつつブラウザ標準スクロールバーを非表示にする。 */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* 旧 Edge / IE */
+}
+.pdf-sidebar-pane::-webkit-scrollbar {
+  display: none; /* WebKit (Chrome/Safari) */
 }
 .pdf-outline-list {
   list-style: none;
