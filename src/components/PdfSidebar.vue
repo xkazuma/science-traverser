@@ -7,7 +7,8 @@
  * - アウトライン: ドキュメント確定時に `usePdfOutline().load(doc)` で木を取得し、
  *   タイトル階層を再帰リスト（このコンポーネント自身を再帰利用）で表示する。
  *   `pageIndex` が非 null のノードを選択すると `store.requestGoToPage`（要件 5.2）。
- *   木が空（しおり無し）のときは「アウトラインがありません」と明示（要件 5.5）。
+ *   木が空（しおり無し）のときはアウトラインタブ自体を出さず、サムネイルのみを
+ *   既定表示にする（要件 5.5）。
  * - サムネイル: `PdfThumbnail`（task 4.5）をそのまま内包（要件 5.3, 5.4 は同部品）。
  *
  * 境界規約（steering tech.md / structure.md）: これは chrome。Vuetify を用いてよいが
@@ -58,8 +59,16 @@ const tab = ref<'outline' | 'thumbnails'>('outline')
 
 /** ルートで保持するアウトライン木（doc 確定時に load した結果）。 */
 const outlineTree = ref<OutlineNode[]>([])
-/** load 完了フラグ（未完了時に「無い」表示を出さないため）。 */
+/** load 完了フラグ（未完了時に判定を確定させないため）。 */
 const outlineLoaded = ref(false)
+
+/**
+ * アウトラインを表示するか（要件 5.5）。load 済みかつ木が非空のときのみ true。
+ * false（しおり無し）のときはアウトラインタブを出さず、サムネイルのみ表示する。
+ */
+const hasOutline = computed(
+  () => outlineLoaded.value && outlineTree.value.length > 0,
+)
 
 /** ルート描画かどうか（props.nodes 未指定 = ルート）。 */
 const isRoot = props.nodes === null
@@ -141,6 +150,8 @@ async function reloadOutline(): Promise<void> {
   const tree = await outline.load(rawDoc)
   outlineTree.value = tree
   outlineLoaded.value = true
+  // しおりが有ればアウトラインを、無ければサムネイルを既定タブにする（要件 5.5）。
+  tab.value = tree.length > 0 ? 'outline' : 'thumbnails'
 }
 
 if (isRoot) {
@@ -206,22 +217,21 @@ function selectNode(node: OutlineNode): void {
     width="280"
   >
     <v-tabs v-model="tab" grow density="compact">
-      <v-tab value="outline" data-test="tab-outline">アウトライン</v-tab>
+      <!-- しおりが有るときだけアウトラインタブを出す（要件 5.5）。 -->
+      <v-tab v-if="hasOutline" value="outline" data-test="tab-outline"
+        >アウトライン</v-tab
+      >
       <v-tab value="thumbnails" data-test="tab-thumbnails">サムネイル</v-tab>
     </v-tabs>
 
     <v-window v-model="tab" class="pdf-sidebar-window">
-      <v-window-item value="outline" class="pdf-sidebar-pane">
+      <v-window-item
+        v-if="hasOutline"
+        value="outline"
+        class="pdf-sidebar-pane"
+      >
         <div ref="outlineRoot">
-          <div
-            v-if="outlineLoaded && outlineTree.length === 0"
-            class="pdf-outline-empty"
-            data-test="outline-empty"
-          >
-            アウトラインがありません
-          </div>
           <PdfSidebar
-            v-else-if="outlineTree.length > 0"
             :nodes="outlineTree"
             :depth="0"
             :active-page-index="activePageIndex"
@@ -271,10 +281,5 @@ function selectNode(node: OutlineNode): void {
 .pdf-outline-node.is-current {
   background-color: rgba(25, 118, 210, 0.16);
   font-weight: 600;
-}
-.pdf-outline-empty {
-  padding: 16px;
-  color: rgba(0, 0, 0, 0.6);
-  font-size: 14px;
 }
 </style>

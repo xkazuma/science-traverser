@@ -51,12 +51,21 @@ const fitModel = computed<'width' | 'page' | null>({
   },
 })
 
-/** ジャンプ入力のローカルモデル（文字列）。currentPage に追従させる。 */
-const pageInput = ref(String(store.currentPage))
+/**
+ * ジャンプ入力に表示する現在ページ（文字列）。
+ * 未読込（numPages === 0）のときは "0" を表示し、アイドル時に "0 / 0" となる
+ * ようにする（要件 3.6）。読込後は currentPage を表示する。
+ */
+function displayPage(): string {
+  return store.numPages === 0 ? '0' : String(store.currentPage)
+}
+
+/** ジャンプ入力のローカルモデル（文字列）。currentPage / numPages に追従させる。 */
+const pageInput = ref(displayPage())
 watch(
-  () => store.currentPage,
-  (n) => {
-    pageInput.value = String(n)
+  () => [store.currentPage, store.numPages] as const,
+  () => {
+    pageInput.value = displayPage()
   },
 )
 

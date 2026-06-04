@@ -56,6 +56,18 @@ describe('components/PdfToolbar（クローム・ツールバー）', () => {
     expect(wrapper.find('[data-test="page-total"]').text()).toMatch(/\/\s*5/)
   })
 
+  it('3.6: 未読込（numPages=0）ではページ表示が "0 / 0"', () => {
+    // フレッシュ（idle）ストアでマウント。numPages は 0、currentPage は初期 1。
+    const store = usePdfStore()
+    expect(store.numPages).toBe(0)
+    const wrapper = mount(PdfToolbar, { global: { plugins: [vuetify] } })
+    // ジャンプ入力欄は currentPage(1) ではなく "0" を表示する。
+    const input = wrapper.find('[data-test="page-jump"] input')
+    expect((input.element as HTMLInputElement).value).toBe('0')
+    // 総数は "/ 0" 形式 → 合わせて "0 / 0"。
+    expect(wrapper.find('[data-test="page-total"]').text()).toMatch(/\/\s*0/)
+  })
+
   it('3.3: Next クリックで requestGoToPage(currentPage+1)', async () => {
     const { wrapper, store } = mountToolbar({ currentPage: 2, numPages: 5 })
     const spy = vi.spyOn(store, 'requestGoToPage')

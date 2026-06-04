@@ -191,13 +191,16 @@ describe('components/PdfSidebar（アウトライン + サムネイル）', () =
     })
   })
 
-  describe('5.5 — アウトラインが無いことが分かる表示', () => {
-    it('空のアウトラインで「アウトラインがありません」を表示する', async () => {
+  describe('5.5 — アウトラインが無いときはタブを隠しサムネイルのみ', () => {
+    it('空のアウトラインではアウトラインタブを出さず、サムネイルのみ表示する', async () => {
       const { wrapper } = await mountWithOutline([])
-      expect(wrapper.find('[data-test="outline-empty"]').exists()).toBe(true)
-      expect(wrapper.find('[data-test="outline-empty"]').text()).toContain(
-        'アウトラインがありません',
-      )
+      // アウトラインタブは非表示。
+      expect(wrapper.find('[data-test="tab-outline"]').exists()).toBe(false)
+      // サムネイルタブは常に存在し、既定でサムネイルが表示される。
+      expect(wrapper.find('[data-test="tab-thumbnails"]').exists()).toBe(true)
+      expect(wrapper.findComponent(PdfThumbnail).exists()).toBe(true)
+      // 旧来の空表示要素は存在しない。
+      expect(wrapper.find('[data-test="outline-empty"]').exists()).toBe(false)
       expect(wrapper.findAll('[data-test="outline-node"]')).toHaveLength(0)
     })
   })

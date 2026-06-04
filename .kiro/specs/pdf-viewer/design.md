@@ -141,7 +141,8 @@ graph TB
 │   │   ├── usePdfTextLayer.ts       # TextLayer 構築（選択可能テキスト）
 │   │   ├── usePdfOutline.ts         # アウトライン取得・移動先解決
 │   │   ├── usePageVirtualizer.ts    # プレースホルダ高さ確保 + 近傍描画 + cleanup
-│   │   └── useFileIntake.ts         # 選択/D&D → ArrayBuffer、MIME検証
+│   │   ├── useFileIntake.ts         # 選択/D&D → ArrayBuffer、MIME検証
+│   │   └── useZoomShortcuts.ts      # ブラウザズーム上書き（Ctrl+/-/0・Ctrl+ホイール）→ PDF ズーム
 │   ├── stores/
 │   │   └── pdfStore.ts              # doc/view 状態 + 予約スライス
 │   ├── components/
@@ -241,10 +242,12 @@ sequenceDiagram
 | 2.4, 8.2, 8.3 | レイヤ座標整合 | PdfOverlayLayer, coordinates | `Coordinates`, `OverlaySlot` | ズーム/再描画 |
 | 2.5 | ページの水平中央揃え | PdfViewport | プレースホルダ left 中央寄せ | — |
 | 3.1, 3.2 | ページ番号/追従 | PdfToolbar, PdfViewport, pdfStore | `PdfState` | — |
+| 3.6 | 未読込時 0/0 表示 | PdfToolbar | `PdfState` | — |
+| 4.6 | ブラウザズーム上書き | useZoomShortcuts, PdfViewer, pdfStore | `PdfState` | — |
 | 3.3, 3.4, 3.5 | 前後/ジャンプ/範囲外 | PdfToolbar, pdfStore, usePageVirtualizer | `PdfState` | — |
 | 4.1, 4.2 | ズーム/クランプ | PdfToolbar, pdfStore, usePdfPageRender | `PdfState`, `PageRender` | ズーム/再描画 |
 | 4.3, 4.4, 4.5 | フィット/リサイズ | PdfViewport, pdfStore | `PdfState` | ズーム/再描画 |
-| 5.1, 5.2, 5.5 | アウトライン | PdfSidebar, usePdfOutline | `Outline` | — |
+| 5.1, 5.2, 5.5 | アウトライン（5.5=未取得時タブ非表示） | PdfSidebar, usePdfOutline | `Outline` | — |
 | 5.3, 5.4 | サムネイル | PdfSidebar, PdfThumbnail | `Virtualizer` | — |
 | 5.6 | ナビ領域と本文の独立スクロール | PdfViewer, PdfDropZone, PdfViewport | アプリシェル高さ規約 | — |
 | 5.7 | 現在ページのアウトライン強調 | PdfSidebar, pdfStore | `PdfState` | — |
@@ -470,7 +473,12 @@ export interface PdfOverlaySlotProps {
   `overflow:auto` が**内部スクロールを所有**し、ウィンドウ/レイアウト側へスクロールが抜けない。
   結果としてサイドバー（独自に `overflow-y:auto` を持つドロワーペイン）と本文は**独立して
   スクロール**する（一方が他方を動かさない）。
-- **PdfToolbar**: 開く・前後・ジャンプ・ズーム・フィット・ページ数。Vuetify 部品で構成し、操作は store actions/emit のみ（ロジックを持たない）。
+  **ブラウザズーム上書き（要件 4.6）**: composable `useZoomShortcuts` を配線し、`window` の
+  `keydown`（Ctrl/⌘ + `=`/`+`→zoomIn, `-`→zoomOut, `0`→100%）と `wheel`（`{ passive: false }`,
+  Ctrl/⌘ + deltaY）を `preventDefault` で奪って `store.zoomIn/zoomOut/setScale` に割り当てる。
+  `status === 'ready'` のときのみ作動し、未読込時はブラウザ既定ズームを残す。アンマウントで解除。
+  注: Ctrl+ホイールは `{ passive:false }` で確実に抑止できるが、キーボードのズーム抑止はブラウザ依存。
+- **PdfToolbar**: 開く・前後・ジャンプ・ズーム・フィット・ページ数。Vuetify 部品で構成し、操作は store actions/emit のみ（ロジックを持たない）。**未読込時のページ表示（要件 3.6）**: `numPages === 0` のとき現在ページ表示を `0` とし、総数 `0` と合わせて「0 / 0」にする。
 - **PdfDropZone**: 全面 D&D。ドラッグ中の視覚FB は `VOverlay` 等（1.3）。`height:100%` 連鎖で子（Viewport/状態表示）へ bounded 高を渡す。
 - **PdfSidebar / PdfThumbnail**: `VNavigationDrawer` + アウトライン木 / 仮想スクロール（サムネイル一覧）。選択で `goToPage`。
   **現在ページ強調（要件 5.7）**: `store.currentPage` を読み、強調対象のアウトライン項目＝
@@ -479,6 +487,9 @@ export interface PdfOverlaySlotProps {
   **自動スクロール追従（要件 5.8）**: 強調変化時、`nextTick` 後にドロワー内の最後の `is-current`
   要素へ `scrollIntoView({ block: 'nearest' })` し、強調行を可視に保つ。スクロールは
   `.pdf-sidebar-pane`（`overflow-y:auto`）内に閉じ、本文表示は動かさない（5.6 の独立スクロール前提）。
+  **アウトライン未取得時のタブ制御（要件 5.5・改訂）**: `outlineLoaded && tree.length === 0` のとき
+  アウトラインのタブ／ペインを `v-if` で非表示にし、サムネイルのみ表示。既定タブも `thumbnails` に
+  切り替える（「アウトラインがありません」メッセージは廃止）。
 - **PdfViewport / PdfPage / PdfCanvasLayer / PdfTextLayer**: スクロール容器と3層スタック（素の DOM/canvas）。`.pdf-viewport` は bounded 高 + `overflow:auto` で内部スクロールを所有（要件 5.6）。
   **水平中央揃え（要件 2.5）**: 各ページプレースホルダは絶対配置で `left: max(0px, calc(50% - 幅/2))` とし、ページ幅が表示領域より狭いときは左右余白を均等に中央寄せ、広いとき（ズームイン）は `0` に張り付き従来どおり水平スクロールする。純CSSのためコンテナ幅にリアクティブ。
 - **PdfLoadingState / PdfErrorState**: `VProgressLinear`/`VProgressCircular`/`VAlert`/`VEmptyState` で進捗・初期案内・破損/パスワード/非PDF を表示。

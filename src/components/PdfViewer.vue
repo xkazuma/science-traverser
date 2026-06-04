@@ -39,12 +39,16 @@ import PdfToolbar from '@/components/PdfToolbar.vue'
 import PdfViewport from '@/components/PdfViewport.vue'
 import { useFileIntake } from '@/composables/useFileIntake'
 import { usePdfDocument } from '@/composables/usePdfDocument'
+import { useZoomShortcuts } from '@/composables/useZoomShortcuts'
 import { usePdfStore } from '@/stores/pdfStore'
 
 const store = usePdfStore()
 const intake = useFileIntake()
 // open/close ライフサイクルは単一インスタンスで一貫させる（破棄に必要）。
 const pdfDocument = usePdfDocument()
+
+// ブラウザズーム（Ctrl/Cmd +/-/0・Ctrl/Cmd+ホイール）を PDF ズームへ転用（要件 4.6）。
+useZoomShortcuts()
 
 /** 隠しファイル入力。Toolbar の open で click() してピッカーを開く。 */
 const fileInput = ref<HTMLInputElement | null>(null)
