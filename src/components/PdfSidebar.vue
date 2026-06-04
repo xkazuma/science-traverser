@@ -18,7 +18,7 @@
  * オーケストレーション（status 出し分け = 要件 5.1 のビューア統合）は task 5.1 の
  * PdfViewer の領分。ここはアウトライン/サムネイルの提示のみを担う。
  */
-import { computed, ref, toRaw, watch } from 'vue'
+import { computed, nextTick, ref, toRaw, watch } from 'vue'
 
 import PdfThumbnail from '@/components/PdfThumbnail.vue'
 import type { OutlineNode } from '@/composables/usePdfOutline'
@@ -81,7 +81,7 @@ function collectPageIndexes(nodes: OutlineNode[], acc: number[]): void {
  * 現在ページに対応する強調対象の `pageIndex`（要件 5.7）。
  * 「`pageIndex` が `currentPage` 以下で最大」＝現在ページを含むしおりを選ぶ。
  * 該当なし（先頭しおりより前など）は null。ルートでのみ算出し、再帰子へは props で渡す。
- * 算出のみで、アウトラインの自動スクロール追従は行わない。
+ * この値の変化を契機に、要件 5.8 の自動スクロールを行う（下記 watch）。
  */
 const activePageIndex = computed<number | null>(() => {
   if (!isRoot) return props.activePageIndex
@@ -98,6 +98,29 @@ const activePageIndex = computed<number | null>(() => {
 /** ノードが現在ページ強調の対象か（要件 5.7）。 */
 function isCurrent(node: OutlineNode): boolean {
   return node.pageIndex !== null && node.pageIndex === activePageIndex.value
+}
+
+/** アウトライン木のルート DOM。強調行のスクロール対象探索に使う（ルートのみ）。 */
+const outlineRoot = ref<HTMLElement | null>(null)
+
+/**
+ * 強調行のアウトライン自動スクロール（要件 5.8）。強調が変化したら DOM 反映後に、
+ * 最後の `is-current` 要素を `scrollIntoView({ block: 'nearest' })` で可視にする。
+ * 5.6 によりウィンドウは非スクロールなので、実際に動くのは `.pdf-sidebar-pane`
+ * （overflow-y:auto）内のみで、本文表示は動かない。ルートのみ実行。
+ */
+if (isRoot) {
+  watch(activePageIndex, async () => {
+    await nextTick()
+    const el = outlineRoot.value
+    if (el === null) return
+    const currents = el.querySelectorAll('.pdf-outline-node.is-current')
+    const last = currents.item(currents.length - 1)
+    // scrollIntoView は実ブラウザに存在。jsdom 等では未実装なので存在を確認する。
+    if (last instanceof HTMLElement && typeof last.scrollIntoView === 'function') {
+      last.scrollIntoView({ block: 'nearest' })
+    }
+  })
 }
 
 /** doc が差し替わったらアウトラインを再取得する（ルートのみ）。 */
@@ -189,19 +212,21 @@ function selectNode(node: OutlineNode): void {
 
     <v-window v-model="tab" class="pdf-sidebar-window">
       <v-window-item value="outline" class="pdf-sidebar-pane">
-        <div
-          v-if="outlineLoaded && outlineTree.length === 0"
-          class="pdf-outline-empty"
-          data-test="outline-empty"
-        >
-          アウトラインがありません
+        <div ref="outlineRoot">
+          <div
+            v-if="outlineLoaded && outlineTree.length === 0"
+            class="pdf-outline-empty"
+            data-test="outline-empty"
+          >
+            アウトラインがありません
+          </div>
+          <PdfSidebar
+            v-else-if="outlineTree.length > 0"
+            :nodes="outlineTree"
+            :depth="0"
+            :active-page-index="activePageIndex"
+          />
         </div>
-        <PdfSidebar
-          v-else-if="outlineTree.length > 0"
-          :nodes="outlineTree"
-          :depth="0"
-          :active-page-index="activePageIndex"
-        />
       </v-window-item>
 
       <v-window-item value="thumbnails" class="pdf-sidebar-pane">
@@ -242,7 +267,7 @@ function selectNode(node: OutlineNode): void {
 .pdf-outline-node.is-navigable:hover {
   background-color: rgba(25, 118, 210, 0.08);
 }
-/* 現在ページに対応するしおりの視覚強調（要件 5.7）。自動スクロール追従は行わない。 */
+/* 現在ページに対応するしおりの視覚強調（要件 5.7）。自動スクロールは要件 5.8 の watch で行う。 */
 .pdf-outline-node.is-current {
   background-color: rgba(25, 118, 210, 0.16);
   font-weight: 600;

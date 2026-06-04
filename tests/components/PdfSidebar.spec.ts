@@ -202,7 +202,7 @@ describe('components/PdfSidebar（アウトライン + サムネイル）', () =
     })
   })
 
-  describe('5.7 — 現在ページのアウトライン強調', () => {
+  describe('5.7/5.8 — 現在ページのアウトライン強調と自動スクロール', () => {
     // pageIndex <= currentPage で最大のノード（現在ページを含むしおり）を強調する。
     const tree: OutlineNode[] = [
       {
@@ -251,21 +251,29 @@ describe('components/PdfSidebar（アウトライン + サムネイル）', () =
       expect(currentTitles(wrapper)).toEqual([])
     })
 
-    it('現在ページ変化で自動スクロール追従しない（強調のみ）', async () => {
-      // jsdom は scrollIntoView を実装しないため、検知用スタブを差し込んで
-      // 「強調はするがスクロール追従はしない」を確認する。
+    it('強調変化時に最後の強調行へ自動スクロールする（要件 5.8）', async () => {
+      // jsdom は scrollIntoView を実装しないため検知用スタブを差し込む。
       const scrollIntoView = vi.fn()
       const proto = Element.prototype as unknown as {
-        scrollIntoView?: () => void
+        scrollIntoView?: (arg?: unknown) => void
       }
       proto.scrollIntoView = scrollIntoView
       try {
         const { wrapper, store } = await mountWithOutline(tree)
+        // マウント/初期 load 中の呼び出しは無視し、ページ変化由来のみを見る。
+        scrollIntoView.mockClear()
+
         store.setCurrentPage(3)
-        await wrapper.vm.$nextTick()
-        // 強調は反映されるが、アウトライン側のスクロール追従は起こさない。
+        // watch は async（内部で nextTick）なので呼び出しまでポーリングで待つ。
+        await waitFor(() => scrollIntoView.mock.calls.length > 0)
+
         expect(currentTitles(wrapper)).toEqual(['Chapter 2'])
-        expect(scrollIntoView).not.toHaveBeenCalled()
+        expect(scrollIntoView).toHaveBeenCalled()
+        // スクロール対象が「最後の強調行（is-current）」であること。
+        const contexts = scrollIntoView.mock.instances as unknown as HTMLElement[]
+        const target = contexts[contexts.length - 1]
+        expect(target?.classList.contains('is-current')).toBe(true)
+        expect(target?.textContent?.trim()).toBe('Chapter 2')
       } finally {
         delete proto.scrollIntoView
       }

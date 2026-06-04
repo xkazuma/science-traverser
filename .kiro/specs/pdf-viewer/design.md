@@ -247,6 +247,7 @@ sequenceDiagram
 | 5.3, 5.4 | サムネイル | PdfSidebar, PdfThumbnail | `Virtualizer` | — |
 | 5.6 | ナビ領域と本文の独立スクロール | PdfViewer, PdfDropZone, PdfViewport | アプリシェル高さ規約 | — |
 | 5.7 | 現在ページのアウトライン強調 | PdfSidebar, pdfStore | `PdfState` | — |
+| 5.8 | 強調行のアウトライン自動スクロール | PdfSidebar | `PdfState` | — |
 | 6.1, 6.3, 6.4 | 仮想化/解放 | PdfViewport, usePageVirtualizer | `Virtualizer` | 描画フロー |
 | 6.2 | 正しいスクロール総量 | PdfViewport, usePageVirtualizer | `Virtualizer` | — |
 | 7.1, 7.2 | ローディング/進捗 | PdfLoadingState, usePdfDocument | `PdfState` | 読み込みフロー |
@@ -473,7 +474,10 @@ export interface PdfOverlaySlotProps {
 - **PdfSidebar / PdfThumbnail**: `VNavigationDrawer` + アウトライン木 / 仮想スクロール（サムネイル一覧）。選択で `goToPage`。
   **現在ページ強調（要件 5.7）**: `store.currentPage` を読み、強調対象のアウトライン項目＝
   「`pageIndex`（1-origin、非 null）が `currentPage` 以下で最大のノード」＝現在ページを含むしおりを
-  `is-current` で視覚強調する。**自動スクロール追従は行わない**（強調のみ）。
+  `is-current` で視覚強調する。
+  **自動スクロール追従（要件 5.8）**: 強調変化時、`nextTick` 後にドロワー内の最後の `is-current`
+  要素へ `scrollIntoView({ block: 'nearest' })` し、強調行を可視に保つ。スクロールは
+  `.pdf-sidebar-pane`（`overflow-y:auto`）内に閉じ、本文表示は動かさない（5.6 の独立スクロール前提）。
 - **PdfViewport / PdfPage / PdfCanvasLayer / PdfTextLayer**: スクロール容器と3層スタック（素の DOM/canvas）。`.pdf-viewport` は bounded 高 + `overflow:auto` で内部スクロールを所有（要件 5.6）。
 - **PdfLoadingState / PdfErrorState**: `VProgressLinear`/`VProgressCircular`/`VAlert`/`VEmptyState` で進捗・初期案内・破損/パスワード/非PDF を表示。
 
