@@ -202,6 +202,76 @@ describe('components/PdfSidebar（アウトライン + サムネイル）', () =
     })
   })
 
+  describe('5.7 — 現在ページのアウトライン強調', () => {
+    // pageIndex <= currentPage で最大のノード（現在ページを含むしおり）を強調する。
+    const tree: OutlineNode[] = [
+      {
+        title: 'Chapter 1',
+        pageIndex: 1,
+        children: [{ title: '1.1', pageIndex: 2, children: [] }],
+      },
+      { title: 'Chapter 2', pageIndex: 3, children: [] },
+    ]
+
+    function currentTitles(wrapper: VueWrapper): string[] {
+      return wrapper
+        .findAll('[data-test="outline-node"]')
+        .filter((n) => n.classes().includes('is-current'))
+        .map((n) => n.text())
+    }
+
+    it('現在ページ以下で最大の pageIndex のノードを is-current で強調する', async () => {
+      const { wrapper, store } = await mountWithOutline(tree)
+
+      // currentPage=2 → 強調は '1.1'(pageIndex 2)。
+      store.setCurrentPage(2)
+      await wrapper.vm.$nextTick()
+      expect(currentTitles(wrapper)).toEqual(['1.1'])
+
+      // currentPage=3 → 強調は 'Chapter 2'(pageIndex 3)。
+      store.setCurrentPage(3)
+      await wrapper.vm.$nextTick()
+      expect(currentTitles(wrapper)).toEqual(['Chapter 2'])
+
+      // currentPage=1 → 強調は 'Chapter 1'(pageIndex 1)。
+      store.setCurrentPage(1)
+      await wrapper.vm.$nextTick()
+      expect(currentTitles(wrapper)).toEqual(['Chapter 1'])
+    })
+
+    it('現在ページより前に該当しおりが無い場合は強調しない', async () => {
+      // 全 pageIndex が currentPage より大きい木。
+      const laterTree: OutlineNode[] = [
+        { title: 'Chapter A', pageIndex: 2, children: [] },
+        { title: 'Chapter B', pageIndex: 3, children: [] },
+      ]
+      const { wrapper, store } = await mountWithOutline(laterTree)
+      store.setCurrentPage(1)
+      await wrapper.vm.$nextTick()
+      expect(currentTitles(wrapper)).toEqual([])
+    })
+
+    it('現在ページ変化で自動スクロール追従しない（強調のみ）', async () => {
+      // jsdom は scrollIntoView を実装しないため、検知用スタブを差し込んで
+      // 「強調はするがスクロール追従はしない」を確認する。
+      const scrollIntoView = vi.fn()
+      const proto = Element.prototype as unknown as {
+        scrollIntoView?: () => void
+      }
+      proto.scrollIntoView = scrollIntoView
+      try {
+        const { wrapper, store } = await mountWithOutline(tree)
+        store.setCurrentPage(3)
+        await wrapper.vm.$nextTick()
+        // 強調は反映されるが、アウトライン側のスクロール追従は起こさない。
+        expect(currentTitles(wrapper)).toEqual(['Chapter 2'])
+        expect(scrollIntoView).not.toHaveBeenCalled()
+      } finally {
+        delete proto.scrollIntoView
+      }
+    })
+  })
+
   describe('サムネイル一覧の内包', () => {
     it('サムネイルタブで PdfThumbnail を埋め込む', async () => {
       const { wrapper } = await mountWithOutline([])

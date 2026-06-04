@@ -115,19 +115,38 @@ onBeforeUnmount(() => {
       <!-- 全面 D&D ラッパ。どこにドロップしても読み込みが始まる（要件 1.2）。 -->
       <PdfDropZone class="pdf-viewer__dropzone" @file="onDropped">
         <!-- status 駆動の単一コンテンツ領域（要件 7.5 / 2.1）。 -->
-        <PdfViewport v-if="store.status === 'ready'" />
-        <PdfLoadingState v-else-if="store.status === 'loading'" />
-        <PdfErrorState v-else />
+        <PdfViewport v-if="store.status === 'ready'" class="pdf-viewer__content" />
+        <PdfLoadingState
+          v-else-if="store.status === 'loading'"
+          class="pdf-viewer__content"
+        />
+        <PdfErrorState v-else class="pdf-viewer__content" />
       </PdfDropZone>
     </v-main>
   </v-layout>
 </template>
 
 <style scoped>
+/*
+ * アプリシェルの高さ規約（要件 5.6）。ルート（v-layout）を固定高 100vh の definite な
+ * 高さアンカーにすることで、配下の height:100% 連鎖（v-main → DropZone → PdfViewport）が
+ * 解決し、PdfViewport の overflow:auto が内部スクロールを所有する。これによりウィンドウ/
+ * レイアウト側へスクロールが抜けず、サイドバー（独自スクロールのドロワー）と本文が独立して
+ * スクロールする（一方が他方を動かさない）。
+ */
+.pdf-viewer {
+  height: 100vh;
+}
 .pdf-viewer__main {
   height: 100%;
+  /* 子の超過分をウィンドウへ抜けさせない（本文スクロールは PdfViewport が所有）。 */
+  overflow: hidden;
 }
 .pdf-viewer__dropzone {
+  height: 100%;
+}
+/* status 駆動コンテンツ（Viewport/Loading/Error）を DropZone いっぱいに広げる。 */
+.pdf-viewer__content {
   height: 100%;
 }
 </style>

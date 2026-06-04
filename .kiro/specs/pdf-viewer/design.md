@@ -245,6 +245,8 @@ sequenceDiagram
 | 4.3, 4.4, 4.5 | フィット/リサイズ | PdfViewport, pdfStore | `PdfState` | ズーム/再描画 |
 | 5.1, 5.2, 5.5 | アウトライン | PdfSidebar, usePdfOutline | `Outline` | — |
 | 5.3, 5.4 | サムネイル | PdfSidebar, PdfThumbnail | `Virtualizer` | — |
+| 5.6 | ナビ領域と本文の独立スクロール | PdfViewer, PdfDropZone, PdfViewport | アプリシェル高さ規約 | — |
+| 5.7 | 現在ページのアウトライン強調 | PdfSidebar, pdfStore | `PdfState` | — |
 | 6.1, 6.3, 6.4 | 仮想化/解放 | PdfViewport, usePageVirtualizer | `Virtualizer` | 描画フロー |
 | 6.2 | 正しいスクロール総量 | PdfViewport, usePageVirtualizer | `Virtualizer` | — |
 | 7.1, 7.2 | ローディング/進捗 | PdfLoadingState, usePdfDocument | `PdfState` | 読み込みフロー |
@@ -460,10 +462,19 @@ export interface PdfOverlaySlotProps {
   PdfOverlayLayer。viewport 座標での精密配置のため Vuetify を挟まない。
 
 - **PdfViewer**: 全体オーケストレーション。status に応じて Loading/Error/Viewport を出し分け。`<v-app>` 配下。
+  **アプリシェルの高さ規約（要件 5.6）**: ルート（v-layout）を**固定高 `100vh` の definite な
+  高さアンカー**にし、v-main → DropZone → PdfViewport を `height:100%` 連鎖で bounded 高にする
+  （v-main は `overflow:hidden` で超過をウィンドウへ抜けさせない）。これにより `PdfViewport` の
+  `overflow:auto` が**内部スクロールを所有**し、ウィンドウ/レイアウト側へスクロールが抜けない。
+  結果としてサイドバー（独自に `overflow-y:auto` を持つドロワーペイン）と本文は**独立して
+  スクロール**する（一方が他方を動かさない）。
 - **PdfToolbar**: 開く・前後・ジャンプ・ズーム・フィット・ページ数。Vuetify 部品で構成し、操作は store actions/emit のみ（ロジックを持たない）。
-- **PdfDropZone**: 全面 D&D。ドラッグ中の視覚FB は `VOverlay` 等（1.3）。
-- **PdfSidebar / PdfThumbnail**: `VNavigationDrawer` + `VTreeview`（アウトライン）/ 仮想スクロール（サムネイル一覧）。選択で `goToPage`。
-- **PdfViewport / PdfPage / PdfCanvasLayer / PdfTextLayer**: スクロール容器と3層スタック（素の DOM/canvas）。
+- **PdfDropZone**: 全面 D&D。ドラッグ中の視覚FB は `VOverlay` 等（1.3）。`height:100%` 連鎖で子（Viewport/状態表示）へ bounded 高を渡す。
+- **PdfSidebar / PdfThumbnail**: `VNavigationDrawer` + アウトライン木 / 仮想スクロール（サムネイル一覧）。選択で `goToPage`。
+  **現在ページ強調（要件 5.7）**: `store.currentPage` を読み、強調対象のアウトライン項目＝
+  「`pageIndex`（1-origin、非 null）が `currentPage` 以下で最大のノード」＝現在ページを含むしおりを
+  `is-current` で視覚強調する。**自動スクロール追従は行わない**（強調のみ）。
+- **PdfViewport / PdfPage / PdfCanvasLayer / PdfTextLayer**: スクロール容器と3層スタック（素の DOM/canvas）。`.pdf-viewport` は bounded 高 + `overflow:auto` で内部スクロールを所有（要件 5.6）。
 - **PdfLoadingState / PdfErrorState**: `VProgressLinear`/`VProgressCircular`/`VAlert`/`VEmptyState` で進捗・初期案内・破損/パスワード/非PDF を表示。
 
 ## Data Models

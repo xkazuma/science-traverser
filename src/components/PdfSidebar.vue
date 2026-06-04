@@ -18,7 +18,7 @@
  * オーケストレーション（status 出し分け = 要件 5.1 のビューア統合）は task 5.1 の
  * PdfViewer の領分。ここはアウトライン/サムネイルの提示のみを担う。
  */
-import { ref, toRaw, watch } from 'vue'
+import { computed, ref, toRaw, watch } from 'vue'
 
 import PdfThumbnail from '@/components/PdfThumbnail.vue'
 import type { OutlineNode } from '@/composables/usePdfOutline'
@@ -41,8 +41,13 @@ const props = withDefaults(
     nodes?: OutlineNode[] | null
     /** 再帰の深さ（インデント用）。ルートは 0。 */
     depth?: number
+    /**
+     * 強調対象のページ番号（1-origin）。ルートが現在ページから算出し、再帰子へ伝播する
+     * （要件 5.7）。一致する `pageIndex` のノードを視覚強調する。
+     */
+    activePageIndex?: number | null
   }>(),
-  { nodes: null, depth: 0 },
+  { nodes: null, depth: 0, activePageIndex: null },
 )
 
 const store = usePdfStore()
@@ -62,6 +67,37 @@ const isRoot = props.nodes === null
 /** 実際に描画する木: ルートは内部 ref、再帰子は props 経由。 */
 function currentNodes(): OutlineNode[] {
   return isRoot ? outlineTree.value : (props.nodes ?? [])
+}
+
+/** 木を再帰走査し、非 null の `pageIndex` を全て集める。 */
+function collectPageIndexes(nodes: OutlineNode[], acc: number[]): void {
+  for (const node of nodes) {
+    if (node.pageIndex !== null) acc.push(node.pageIndex)
+    if (node.children.length > 0) collectPageIndexes(node.children, acc)
+  }
+}
+
+/**
+ * 現在ページに対応する強調対象の `pageIndex`（要件 5.7）。
+ * 「`pageIndex` が `currentPage` 以下で最大」＝現在ページを含むしおりを選ぶ。
+ * 該当なし（先頭しおりより前など）は null。ルートでのみ算出し、再帰子へは props で渡す。
+ * 算出のみで、アウトラインの自動スクロール追従は行わない。
+ */
+const activePageIndex = computed<number | null>(() => {
+  if (!isRoot) return props.activePageIndex
+  const current = store.currentPage
+  const indexes: number[] = []
+  collectPageIndexes(outlineTree.value, indexes)
+  let best: number | null = null
+  for (const p of indexes) {
+    if (p <= current && (best === null || p > best)) best = p
+  }
+  return best
+})
+
+/** ノードが現在ページ強調の対象か（要件 5.7）。 */
+function isCurrent(node: OutlineNode): boolean {
+  return node.pageIndex !== null && node.pageIndex === activePageIndex.value
 }
 
 /** doc が差し替わったらアウトラインを再取得する（ルートのみ）。 */
@@ -115,8 +151,12 @@ function selectNode(node: OutlineNode): void {
       <div
         class="pdf-outline-node"
         data-test="outline-node"
-        :class="{ 'is-navigable': node.pageIndex !== null }"
+        :class="{
+          'is-navigable': node.pageIndex !== null,
+          'is-current': isCurrent(node),
+        }"
         :style="{ paddingInlineStart: `${(depth ?? 0) * 16 + 8}px` }"
+        :aria-current="isCurrent(node) ? 'true' : undefined"
         role="button"
         tabindex="0"
         @click="selectNode(node)"
@@ -129,6 +169,7 @@ function selectNode(node: OutlineNode): void {
         v-if="node.children.length > 0"
         :nodes="node.children"
         :depth="(depth ?? 0) + 1"
+        :active-page-index="activePageIndex"
       />
     </li>
   </ul>
@@ -159,6 +200,7 @@ function selectNode(node: OutlineNode): void {
           v-else-if="outlineTree.length > 0"
           :nodes="outlineTree"
           :depth="0"
+          :active-page-index="activePageIndex"
         />
       </v-window-item>
 
@@ -199,6 +241,11 @@ function selectNode(node: OutlineNode): void {
 }
 .pdf-outline-node.is-navigable:hover {
   background-color: rgba(25, 118, 210, 0.08);
+}
+/* 現在ページに対応するしおりの視覚強調（要件 5.7）。自動スクロール追従は行わない。 */
+.pdf-outline-node.is-current {
+  background-color: rgba(25, 118, 210, 0.16);
+  font-weight: 600;
 }
 .pdf-outline-empty {
   padding: 16px;

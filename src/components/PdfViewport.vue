@@ -253,3 +253,15 @@ onBeforeUnmount(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+/*
+ * スクロール容器は bounded な高さを持たねば overflow:auto が内部スクロールを生まず、
+ * スクロールが祖先（ウィンドウ/レイアウト）へ抜けてサイドバーと連動してしまう（要件 5.6）。
+ * 親（DropZone）が height:100% 連鎖で bounded 高を渡すので、ここも height:100% で受けて
+ * 内部スクロールを所有する。
+ */
+.pdf-viewport {
+  height: 100%;
+}
+</style>

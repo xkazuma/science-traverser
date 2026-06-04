@@ -49,6 +49,34 @@ try {
   check('canvas actually rendered content (not blank) (2.2)', canvasInfo.found && canvasInfo.nonWhite > 0 && canvasInfo.max - canvasInfo.min > 20,
     `nonWhite=${canvasInfo?.nonWhite}, contrast=${canvasInfo ? canvasInfo.max - canvasInfo.min : 'n/a'}`)
 
+  // 3b. scroll independence (Req 5.6): the viewport owns its own internal scroll,
+  // the window does NOT scroll, and scrolling the viewport does not move the sidebar.
+  const scrollInfo = await page.evaluate(async () => {
+    const vp = document.querySelector('.pdf-viewport')
+    const drawer = document.querySelector('[data-test="pdf-sidebar"]')
+    const doc = document.scrollingElement || document.documentElement
+    const windowScrollable = doc.scrollHeight > doc.clientHeight + 2
+    const vpInternallyScrollable = !!vp && vp.scrollHeight > vp.clientHeight + 2
+    // scroll the viewport and confirm the window/page top stays put.
+    const beforeWinTop = window.scrollY
+    const drawerTopBefore = drawer ? drawer.getBoundingClientRect().top : 0
+    if (vp) vp.scrollTop = Math.min(300, vp.scrollHeight)
+    await new Promise((r) => setTimeout(r, 150))
+    const afterWinTop = window.scrollY
+    const drawerTopAfter = drawer ? drawer.getBoundingClientRect().top : 0
+    return {
+      windowScrollable,
+      vpInternallyScrollable,
+      windowMoved: Math.abs(afterWinTop - beforeWinTop) > 2,
+      drawerMoved: Math.abs(drawerTopAfter - drawerTopBefore) > 2,
+      vpScrolled: !!vp && vp.scrollTop > 0,
+    }
+  })
+  check('window does NOT scroll; viewport owns internal scroll (5.6)',
+    !scrollInfo.windowScrollable && scrollInfo.vpInternallyScrollable, JSON.stringify(scrollInfo))
+  check('scrolling viewport does not move the window or sidebar (5.6)',
+    scrollInfo.vpScrolled && !scrollInfo.windowMoved && !scrollInfo.drawerMoved, JSON.stringify(scrollInfo))
+
   // 4. selectable text layer present (Req 2.3)
   const spanCount = await page.locator('.text-layer span').count()
   check('text layer has selectable spans (2.3)', spanCount > 0, `spans=${spanCount}`)
