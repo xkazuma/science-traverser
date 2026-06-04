@@ -61,15 +61,31 @@ async function waitFor(
 }
 
 // 実ピクセルは出ないため render/cancel の配線のみ検証する（PdfCanvasLayer.spec 同様）。
-const renderSpy = vi.fn<UsePdfPageRender['render']>(() => Promise.resolve())
-const cancelSpy = vi.fn<UsePdfPageRender['cancel']>()
+// usePdfPageRender は render() 毎に直前タスクをキャンセルするため、サムネイルは
+// **ページごとに独立インスタンス**を使う必要がある（共有すると相互キャンセルで多数が
+// 空になるバグ）。モックは呼び出し毎に新インスタンスを生成して記録し、テストで
+// 「可視ページ数ぶんのインスタンスが作られる（＝共有していない）」を検証する。
+interface RenderInstance {
+  render: ReturnType<typeof vi.fn>
+  cancel: ReturnType<typeof vi.fn>
+}
+const renderInstances: RenderInstance[] = []
 
 vi.mock('@/composables/usePdfPageRender', () => ({
-  usePdfPageRender: (): UsePdfPageRender => ({
-    render: renderSpy,
-    cancel: cancelSpy,
-  }),
+  usePdfPageRender: (): UsePdfPageRender => {
+    const inst: RenderInstance = {
+      render: vi.fn(() => Promise.resolve()),
+      cancel: vi.fn(),
+    }
+    renderInstances.push(inst)
+    return inst as unknown as UsePdfPageRender
+  },
 }))
+
+/** 全インスタンスの render 呼び出しを集約する。 */
+function allRenderCalls(): unknown[][] {
+  return renderInstances.flatMap((i) => i.render.mock.calls)
+}
 
 describe('components/PdfThumbnail（サムネイル一覧）', () => {
   let loadingTask: PDFDocumentLoadingTask
@@ -91,13 +107,11 @@ describe('components/PdfThumbnail（サムネイル一覧）', () => {
 
   beforeEach(() => {
     setActivePinia(createPinia())
-    renderSpy.mockClear()
-    cancelSpy.mockClear()
+    renderInstances.length = 0
   })
 
   afterEach(() => {
-    renderSpy.mockClear()
-    cancelSpy.mockClear()
+    renderInstances.length = 0
   })
 
   /** ready なストアでマウントし、可視窓のサムネイル描画完了まで待つ。 */
@@ -117,7 +131,7 @@ describe('components/PdfThumbnail（サムネイル一覧）', () => {
     store.reset()
     const wrapper = mount(PdfThumbnail, { global: { plugins: [vuetify] } })
     expect(wrapper.findAll('[data-test="thumb-item"]').length).toBe(0)
-    expect(renderSpy).not.toHaveBeenCalled()
+    expect(allRenderCalls()).toHaveLength(0)
   })
 
   describe('5.3 — 全ページのサムネイルが一覧表示される', () => {
@@ -140,11 +154,26 @@ describe('components/PdfThumbnail（サムネイル一覧）', () => {
       // 可視窓には少なくとも 1 つの canvas が描画される。
       expect(wrapper.findAll('canvas').length).toBeGreaterThanOrEqual(1)
       // render は小倍率（< 1）で呼ばれる（サムネイル＝縮小描画）。
-      expect(renderSpy).toHaveBeenCalled()
-      for (const call of renderSpy.mock.calls) {
-        const scaleArg = call[2]
+      expect(allRenderCalls().length).toBeGreaterThanOrEqual(1)
+      for (const call of allRenderCalls()) {
+        const scaleArg = call[2] as number
         expect(scaleArg).toBeGreaterThan(0)
         expect(scaleArg).toBeLessThan(1)
+      }
+    })
+
+    it('ページごとに独立した描画インスタンスを使う（共有による相互キャンセルを防ぐ）', async () => {
+      // 回帰防止: 1 インスタンスを共有すると render() が互いをキャンセルし、最後の
+      // 1 枚以外が空になる。可視ページ数ぶんの独立インスタンスが作られること、
+      // 各インスタンスの render がそのページ向けに呼ばれることを検証する。
+      const { wrapper } = await mountReady()
+      const visibleCanvases = wrapper.findAll('canvas').length
+      // 3 ページ PDF は窓化の可視範囲に全て入る → ページ数ぶんのインスタンス。
+      expect(visibleCanvases).toBe(doc.numPages)
+      expect(renderInstances).toHaveLength(doc.numPages)
+      // 各インスタンスがちょうど自分のページを 1 回描画する（共有なら 1 個に集中）。
+      for (const inst of renderInstances) {
+        expect(inst.render.mock.calls.length).toBeGreaterThanOrEqual(1)
       }
     })
   })
@@ -179,10 +208,13 @@ describe('components/PdfThumbnail（サムネイル一覧）', () => {
     })
   })
 
-  it('アンマウントで in-flight 描画を cancel する', async () => {
+  it('アンマウントで全ページの in-flight 描画を cancel する', async () => {
     const { wrapper } = await mountReady()
-    cancelSpy.mockClear()
+    expect(renderInstances.length).toBeGreaterThan(0)
     wrapper.unmount()
-    expect(cancelSpy).toHaveBeenCalled()
+    // すべての（ページごとの）インスタンスが cancel される。
+    for (const inst of renderInstances) {
+      expect(inst.cancel).toHaveBeenCalled()
+    }
   })
 })

@@ -30,6 +30,7 @@ import {
 } from 'vue'
 
 import { usePdfPageRender } from '@/composables/usePdfPageRender'
+import type { UsePdfPageRender } from '@/composables/usePdfPageRender'
 import type { PDFPageProxy } from '@/lib/pdf/pdfjs'
 import { usePdfStore } from '@/stores/pdfStore'
 
@@ -87,9 +88,23 @@ function itemTop(pageNumber: number): number {
 }
 
 // --- サムネイル描画 ---------------------------------------------------------
-// 描画は composable に委譲（DPR 対応 + 前回 RenderTask キャンセル）。各サムネイルは
-// 独立に再描画されうるため、ページ番号ごとの canvas を描画する。
-const { render, cancel } = usePdfPageRender()
+// 描画は composable に委譲（DPR 対応）。`usePdfPageRender` は **render() 毎に直前の
+// RenderTask をキャンセルする**（要件4.1）ため、1 インスタンスを全サムネイルで共有
+// すると並行描画が互いをキャンセルし、最後の1枚以外が空になる。これを避けるため
+// **ページ番号ごとに独立した描画インスタンス**を持つ（純粋ファクトリなので setup 外
+// 生成も安全）。各ページの再描画はそのページ自身の前回タスクのみをキャンセルする。
+const renderers = new Map<number, UsePdfPageRender>()
+
+/** ページ番号ごとの独立した描画インスタンスを取得（無ければ生成）。 */
+function rendererFor(pageNumber: number): UsePdfPageRender {
+  let r = renderers.get(pageNumber)
+  if (r === undefined) {
+    r = usePdfPageRender()
+    renderers.set(pageNumber, r)
+  }
+  return r
+}
+
 // 可視窓の canvas 要素（ページ番号 → 要素）。テンプレート ref（関数）で集める。
 const canvasEls = new Map<number, HTMLCanvasElement>()
 
@@ -113,10 +128,13 @@ async function renderThumb(
   const baseWidth = page.getViewport({ scale: 1 }).width
   const scale = baseWidth > 0 ? THUMB_WIDTH / baseWidth : FALLBACK_SCALE
   // pdfjs オブジェクトは toRaw して composable に渡す（リアクティブ化を避ける）。
-  await render(canvas, toRaw(page), scale).catch(() => {
-    // ズーム/アンマウント時のキャンセルは composable 側で握り潰される。未処理
-    // Promise 拒否を防ぐ保険。
-  })
+  // ページごとの独立インスタンスで描画する（共有しない＝相互キャンセルを避ける）。
+  await rendererFor(pageNumber)
+    .render(canvas, toRaw(page), scale)
+    .catch(() => {
+      // ズーム/アンマウント時のキャンセルは composable 側で握り潰される。未処理
+      // Promise 拒否を防ぐ保険。
+    })
 }
 
 function selectPage(pageNumber: number): void {
@@ -133,9 +151,10 @@ watch(
   },
 )
 
-// アンマウントで in-flight 描画をキャンセル（要件 4.1 と同じ規律）。
+// アンマウントで全ページの in-flight 描画をキャンセル（要件 4.1 と同じ規律）。
 onBeforeUnmount(() => {
-  cancel()
+  renderers.forEach((r) => r.cancel())
+  renderers.clear()
 })
 </script>
 
