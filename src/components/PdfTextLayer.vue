@@ -71,3 +71,27 @@ onBeforeUnmount(() => {
 <template>
   <div ref="container" class="text-layer" :style="layerStyle" />
 </template>
+
+<!--
+  非 scoped: pdfjs v6 TextLayer が動的生成する <span> グリフを確実に対象化するため。
+  pdfjs はグリフ色を設定しないので、消費側で透明化しないと既定色（白等）の文字が
+  描画画像に重なって読みにくくなる。グリフは「選択用に存在するが視覚的には不可視」が
+  正しい挙動（design.md「不可視・選択可能なグリフ」/ 要件 2.3 の選択は維持）。
+-->
+<style>
+.text-layer {
+  color: transparent;
+}
+.text-layer span,
+.text-layer br {
+  /* グリフを不可視化（pdfjs はインライン color を付けないため CSS で確実に消す）。 */
+  color: transparent !important;
+}
+/* 選択時だけ範囲ハイライトを見せる（テキスト自体は透明のまま）。 */
+.text-layer span::selection {
+  background: rgba(0, 100, 255, 0.25);
+}
+.text-layer span::-moz-selection {
+  background: rgba(0, 100, 255, 0.25);
+}
+</style>
