@@ -133,6 +133,43 @@ if (!('ResizeObserver' in globalThis)) {
     ResizeObserverStub
 }
 
+// jsdom does not implement the VisualViewport API (`window.visualViewport`),
+// which Vuetify's VOverlay location strategy reads unconditionally to register
+// resize/scroll listeners and compute the available viewport box. Because the
+// bare `visualViewport` identifier is undeclared (not just undefined) in jsdom,
+// Vuetify's `visualViewport?.addEventListener(...)` throws a ReferenceError
+// rather than short-circuiting. Provide a minimal, inert VisualViewport stub so
+// chrome components that use VOverlay (e.g. PdfDropZone's drag feedback) mount.
+// Real browsers Vite targets provide the genuine API; this is purely a
+// test-environment shim, mirroring the ResizeObserver stub above.
+// TS's lib.dom already declares `visualViewport` on `Window`, so checking via
+// `'visualViewport' in window` narrows the else-branch to `never`. Read the
+// runtime value through an untyped view to detect jsdom's missing property.
+if (
+  typeof window !== 'undefined' &&
+  (window as unknown as { visualViewport?: unknown }).visualViewport == null
+) {
+  const visualViewportStub = {
+    offsetLeft: 0,
+    offsetTop: 0,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    scale: 1,
+    pageLeft: 0,
+    pageTop: 0,
+    addEventListener(): void {},
+    removeEventListener(): void {},
+    dispatchEvent(): boolean {
+      return false
+    },
+  }
+  Object.defineProperty(window, 'visualViewport', {
+    value: visualViewportStub,
+    configurable: true,
+    writable: true,
+  })
+}
+
 // jsdom's `HTMLCanvasElement.getContext('2d')` returns `null` because no
 // canvas backend is installed. The pdfjs v6 *text layer* (`TextLayer`) is
 // otherwise jsdom-compatible (text extraction + DOM <span> layout need no real
