@@ -238,7 +238,13 @@ onBeforeUnmount(() => {
         :style="{
           position: 'absolute',
           top: `${ph.offsetTop}px`,
-          left: '0px',
+          /*
+           * 水平中央揃え（要件 2.5）。ページ幅が表示領域より狭いときは
+           * (コンテナ幅 - ページ幅)/2 で左右余白を均等に中央寄せ、広いとき
+           * （ズームイン）は 0 に張り付き従来どおり水平スクロールさせる。
+           * 50% はスペーサー（=コンテナ内容幅）基準のためコンテナ幅にリアクティブ。
+           */
+          left: `max(0px, calc(50% - ${ph.width / 2}px))`,
           width: `${ph.width}px`,
           height: `${ph.height}px`,
         }"

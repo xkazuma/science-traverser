@@ -239,6 +239,7 @@ sequenceDiagram
 | 2.2 | DPR鮮明描画 | PdfCanvasLayer, usePdfPageRender | `PageRender` | ズーム/再描画 |
 | 2.3 | テキスト選択層 | PdfTextLayer, usePdfTextLayer | `TextLayer` | — |
 | 2.4, 8.2, 8.3 | レイヤ座標整合 | PdfOverlayLayer, coordinates | `Coordinates`, `OverlaySlot` | ズーム/再描画 |
+| 2.5 | ページの水平中央揃え | PdfViewport | プレースホルダ left 中央寄せ | — |
 | 3.1, 3.2 | ページ番号/追従 | PdfToolbar, PdfViewport, pdfStore | `PdfState` | — |
 | 3.3, 3.4, 3.5 | 前後/ジャンプ/範囲外 | PdfToolbar, pdfStore, usePageVirtualizer | `PdfState` | — |
 | 4.1, 4.2 | ズーム/クランプ | PdfToolbar, pdfStore, usePdfPageRender | `PdfState`, `PageRender` | ズーム/再描画 |
@@ -479,6 +480,7 @@ export interface PdfOverlaySlotProps {
   要素へ `scrollIntoView({ block: 'nearest' })` し、強調行を可視に保つ。スクロールは
   `.pdf-sidebar-pane`（`overflow-y:auto`）内に閉じ、本文表示は動かさない（5.6 の独立スクロール前提）。
 - **PdfViewport / PdfPage / PdfCanvasLayer / PdfTextLayer**: スクロール容器と3層スタック（素の DOM/canvas）。`.pdf-viewport` は bounded 高 + `overflow:auto` で内部スクロールを所有（要件 5.6）。
+  **水平中央揃え（要件 2.5）**: 各ページプレースホルダは絶対配置で `left: max(0px, calc(50% - 幅/2))` とし、ページ幅が表示領域より狭いときは左右余白を均等に中央寄せ、広いとき（ズームイン）は `0` に張り付き従来どおり水平スクロールする。純CSSのためコンテナ幅にリアクティブ。
 - **PdfLoadingState / PdfErrorState**: `VProgressLinear`/`VProgressCircular`/`VAlert`/`VEmptyState` で進捗・初期案内・破損/パスワード/非PDF を表示。
 
 ## Data Models

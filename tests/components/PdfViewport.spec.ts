@@ -125,6 +125,22 @@ describe('components/PdfViewport (スクロール容器・仮想化ホスト)', 
       expect(tops).toEqual(['0px', '200px', '500px'])
     })
 
+    it('2.5 — 各プレースホルダを水平中央揃えの left で配置する', async () => {
+      const { wrapper } = await mountReady()
+      const placeholders = wrapper.findAll('.pdf-placeholder')
+      expect(placeholders.length).toBeGreaterThan(0)
+      for (const p of placeholders) {
+        const el = p.element as HTMLElement
+        const width = Number.parseFloat(el.style.width)
+        // ページ幅が狭ければ (コンテナ幅-幅)/2 で中央寄せ、広ければ 0 に張り付く。
+        // jsdom は max(calc()) を読み戻しで正規化変形するため、式の要素で検証する
+        // （実ブラウザでは正しく `max(0px, calc(50% - 幅/2px))` として解釈される）。
+        expect(el.style.left).toContain(`calc(50% - ${width / 2}px)`)
+        expect(el.style.left).toContain('max(0px')
+        expect(el.style.left).not.toBe('0px')
+      }
+    })
+
     it('可視ページに PdfPage（3層）が描画される', async () => {
       const { wrapper } = await mountReady()
 
