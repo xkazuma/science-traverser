@@ -15,6 +15,11 @@
  *   `consumePendingScroll()` で消費する。未描画ページでも幾何由来で着地する（3.4）。
  * - 仮想化の `activePage` を監視し `setCurrentPage()` で現在ページに反映する（3.2）。
  * - `scale` 変化で `recompute(scale)` を呼びプレースホルダを再算出する（ズーム時）。
+ * - フィット結線（4.3/4.4/4.5）: `fitMode` 変化・コンテナリサイズ（ResizeObserver）で
+ *   `computeFitScale()` によりコンテナ幅基準のフィット倍率を算出し `store.setScale()`
+ *   に反映する。`setScale` は `fitMode` を変えないため、フィット状態は維持される
+ *   （手動 zoomIn/zoomOut のみ `fitMode='none'` に戻す）。算出後は既存の
+ *   `watch(store.scale) → recompute` 連鎖がプレースホルダと PdfPage を更新する。
  *
  * 境界規約（steering tech.md / structure.md「render 層は素の DOM」）:
  * - これは render 層コンポーネントであり Vuetify を一切使わない。
@@ -24,9 +29,10 @@
  * - pdfjs オブジェクト（PDFPageProxy）はリアクティブ Proxy 化すると内部が壊れるため
  *   `markRaw` で保持し、`getViewport` 等は素のオブジェクトに対して呼ぶ。
  */
-import { markRaw, onBeforeUnmount, ref, shallowRef, watch } from 'vue'
+import { markRaw, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 
 import PdfPage from '@/components/PdfPage.vue'
+import { computeFitScale } from '@/composables/useFitScale'
 import {
   usePageVirtualizer,
   type PageDimension,
@@ -139,6 +145,54 @@ watch(
   },
 )
 
+/**
+ * 現在のコンテナ内容領域サイズと取得済みページ寸法からフィット倍率を算出し、
+ * `fitMode !== 'none'` のときのみ `store.setScale()` に反映する（4.3/4.4/4.5）。
+ * コンテナ未マウントや寸法未取得・算出不能（computeFitScale が null）の場合は何もしない。
+ */
+function applyFitScale(): void {
+  if (store.fitMode === 'none') return
+  const el = host.value
+  if (el === null || dimensions.value.length === 0) return
+  const fit = computeFitScale(
+    store.fitMode,
+    { width: el.clientWidth, height: el.clientHeight },
+    dimensions.value,
+  )
+  if (fit === null) return
+  store.setScale(fit)
+}
+
+// フィットモード変化でフィット倍率を即時反映する（4.3 幅 / 4.4 ページ全体）。
+// 'none' へ戻った場合は applyFitScale が早期 return し手動倍率を維持する。
+watch(
+  () => store.fitMode,
+  () => {
+    applyFitScale()
+  },
+)
+
+// 寸法（doc 切替・全ページ寸法取得）確定時、フィット中なら再算出する。
+watch(dimensions, () => {
+  applyFitScale()
+})
+
+// コンテナサイズ変化（ウィンドウリサイズ等）でフィット倍率を再計算する（4.5）。
+// jsdom/test 環境ではコンストラクタが制御可能 stub に差し替わる。
+const resizeObserver = shallowRef<ResizeObserver | null>(null)
+
+onMounted(() => {
+  const el = host.value
+  if (el === null || typeof ResizeObserver === 'undefined') return
+  const ro = new ResizeObserver(() => {
+    applyFitScale()
+  })
+  ro.observe(el)
+  resizeObserver.value = ro
+  // マウント直後の実寸でフィット中なら初期反映する。
+  applyFitScale()
+})
+
 // ジャンプ要求の監視（3.4）。offsetOf(n) の絶対位置へスクロール後にクリアする。
 // 未描画ページでも offsetOf がプレースホルダ由来の幾何で正しく着地する。
 watch(
@@ -159,6 +213,8 @@ watch(activePage, (page) => {
 })
 
 onBeforeUnmount(() => {
+  resizeObserver.value?.disconnect()
+  resizeObserver.value = null
   virtualizer.destroy()
 })
 </script>

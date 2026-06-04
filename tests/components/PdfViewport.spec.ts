@@ -11,8 +11,10 @@ import type { PDFDocumentLoadingTask, PDFDocumentProxy } from '@/lib/pdf/pdfjs'
 import { usePdfStore } from '@/stores/pdfStore'
 import {
   lastIntersectionObserver,
+  lastResizeObserver,
   makeIntersectionEntry,
   resetIntersectionObservers,
+  resetResizeObservers,
 } from '../setup'
 
 /**
@@ -81,10 +83,12 @@ describe('components/PdfViewport (スクロール容器・仮想化ホスト)', 
   beforeEach(() => {
     setActivePinia(createPinia())
     resetIntersectionObservers()
+    resetResizeObservers()
   })
 
   afterEach(() => {
     resetIntersectionObservers()
+    resetResizeObservers()
   })
 
   /** ready なストアでマウントし、寸法取得（プレースホルダ生成）完了まで待つ。 */
@@ -199,6 +203,110 @@ describe('components/PdfViewport (スクロール容器・仮想化ホスト)', 
       )
       await wrapper.vm.$nextTick()
       expect(store.currentPage).toBe(3)
+    })
+  })
+
+  describe('5.2 — フィット結線（基準計算・リサイズ・再描画）', () => {
+    /**
+     * jsdom では element.clientWidth/clientHeight は常に 0 なので、フィット算出に
+     * 渡る実コンテナサイズをテストから与える必要がある。マウント後にホスト要素へ
+     * clientWidth/clientHeight を定義し直して実寸を擬似する。テスト PDF の最広
+     * ページ幅は 200pt（全ページ）、最高ページ高は 300pt。
+     */
+    function defineClientSize(
+      el: HTMLElement,
+      width: number,
+      height: number,
+    ): void {
+      Object.defineProperty(el, 'clientWidth', {
+        value: width,
+        configurable: true,
+      })
+      Object.defineProperty(el, 'clientHeight', {
+        value: height,
+        configurable: true,
+      })
+    }
+
+    it("fitMode='width' に切替えると最広ページ幅基準の倍率が store.scale に反映される（要件 4.3）", async () => {
+      const { store, wrapper } = await mountReady()
+      const host = wrapper.find('.pdf-viewport').element as HTMLElement
+      // コンテナ幅 600 / 最広ページ幅 200 → scale 3.0。
+      defineClientSize(host, 600, 800)
+
+      store.setFitMode('width')
+      await wrapper.vm.$nextTick()
+
+      expect(store.scale).toBe(3)
+      // フィット結線は fitMode を変えない（手動倍率へ戻さない）。
+      expect(store.fitMode).toBe('width')
+    })
+
+    it("fitMode='page' に切替えると最広/最高ページが領域に収まる倍率になる（要件 4.4）", async () => {
+      const { store, wrapper } = await mountReady()
+      const host = wrapper.find('.pdf-viewport').element as HTMLElement
+      // コンテナ 600x600 / 最広幅 200, 最高 300 → min(600/200, 600/300)=min(3,2)=2。
+      defineClientSize(host, 600, 600)
+
+      store.setFitMode('page')
+      await wrapper.vm.$nextTick()
+
+      expect(store.scale).toBe(2)
+      expect(store.fitMode).toBe('page')
+    })
+
+    it('フィット中のコンテナリサイズで倍率が再計算される（要件 4.5）', async () => {
+      const { store, wrapper } = await mountReady()
+      const host = wrapper.find('.pdf-viewport').element as HTMLElement
+
+      defineClientSize(host, 600, 800)
+      store.setFitMode('width')
+      await wrapper.vm.$nextTick()
+      expect(store.scale).toBe(3) // 600/200
+
+      // コンテナ幅が 400 に縮小 → ResizeObserver コールバック発火で再計算。
+      defineClientSize(host, 400, 800)
+      const ro = lastResizeObserver()
+      ro.callback(
+        [
+          {
+            target: host,
+            contentRect: {} as DOMRectReadOnly,
+            borderBoxSize: [],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: [],
+          } as ResizeObserverEntry,
+        ],
+        ro as unknown as ResizeObserver,
+      )
+      await wrapper.vm.$nextTick()
+
+      expect(store.scale).toBe(2) // 400/200
+    })
+
+    it("fitMode='none' のときはリサイズで倍率を変えない（手動倍率維持）", async () => {
+      const { store, wrapper } = await mountReady()
+      const host = wrapper.find('.pdf-viewport').element as HTMLElement
+      store.setScale(1.5)
+      defineClientSize(host, 600, 800)
+
+      const ro = lastResizeObserver()
+      ro.callback(
+        [
+          {
+            target: host,
+            contentRect: {} as DOMRectReadOnly,
+            borderBoxSize: [],
+            contentBoxSize: [],
+            devicePixelContentBoxSize: [],
+          } as ResizeObserverEntry,
+        ],
+        ro as unknown as ResizeObserver,
+      )
+      await wrapper.vm.$nextTick()
+
+      expect(store.scale).toBe(1.5)
+      expect(store.fitMode).toBe('none')
     })
   })
 })

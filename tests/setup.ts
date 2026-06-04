@@ -119,16 +119,57 @@ if (!('IntersectionObserver' in globalThis)) {
 }
 
 // jsdom does not implement ResizeObserver, which Vuetify's layout composables
-// (used by <v-app>) require. Provide a no-op stub so chrome components mount in
-// the test environment.
-class ResizeObserverStub {
-  observe(): void {}
-  unobserve(): void {}
-  disconnect(): void {}
+// (used by <v-app>) require AND which `PdfViewport` uses to recompute the fit
+// scale when its scroll container resizes (Req 4.5). Provide a *controllable*
+// test-only stub mirroring the IntersectionObserver stub above: every
+// constructed observer registers its callback + observed targets in a
+// module-level registry so a test can synthetically fire a resize callback and
+// drive the fit-recompute path deterministically. Real browsers (and the Vite
+// build target) provide the genuine API, so this is purely a test shim.
+export interface ResizeObserverStubHandle {
+  readonly callback: ResizeObserverCallback
+  readonly observed: Set<Element>
+}
+
+const resizeObserverRegistry: ResizeObserverStubHandle[] = []
+
+/** Test helper: the most recently constructed ResizeObserver stub. */
+export function lastResizeObserver(): ResizeObserverStubHandle {
+  const last = resizeObserverRegistry.at(-1)
+  if (last === undefined) {
+    throw new Error('No ResizeObserver has been constructed yet')
+  }
+  return last
+}
+
+/** Test helper: clear the ResizeObserver registry between tests. */
+export function resetResizeObservers(): void {
+  resizeObserverRegistry.length = 0
+}
+
+class ResizeObserverStub implements ResizeObserverStubHandle {
+  readonly callback: ResizeObserverCallback
+  readonly observed = new Set<Element>()
+
+  constructor(callback: ResizeObserverCallback) {
+    this.callback = callback
+    resizeObserverRegistry.push(this)
+  }
+
+  observe(target: Element): void {
+    this.observed.add(target)
+  }
+
+  unobserve(target: Element): void {
+    this.observed.delete(target)
+  }
+
+  disconnect(): void {
+    this.observed.clear()
+  }
 }
 
 if (!('ResizeObserver' in globalThis)) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ;(globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver =
     ResizeObserverStub
 }
