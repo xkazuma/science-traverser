@@ -283,6 +283,44 @@ describe('components/PdfSidebar（アウトライン + サムネイル）', () =
     })
   })
 
+  describe('5.9 — 準備完了後にドロワーをスライドイン', () => {
+    it('読み込み中はドロワーが閉じ、アウトライン準備完了後に開く', async () => {
+      // load を手動制御の Promise にして「閉→開」の遷移を観測する。
+      let resolveLoad: (tree: OutlineNode[]) => void = () => {}
+      loadMock.mockReturnValue(
+        new Promise<OutlineNode[]>((resolve) => {
+          resolveLoad = resolve
+        }),
+      )
+      const store = usePdfStore()
+      store.setReady(markRaw(doc), doc.numPages)
+      const wrapper = mount(Host, { global: { plugins: [vuetify] } })
+
+      // load 呼び出し済みだが未解決の間: 本文準備中なのでドロワーは未 active。
+      await waitFor(() => loadMock.mock.calls.length >= 1)
+      await wrapper.vm.$nextTick()
+      expect(
+        wrapper.find('.v-navigation-drawer--active').exists(),
+      ).toBe(false)
+
+      // 準備完了（outline 解決）後にドロワーがスライドイン（active 化）する。
+      resolveLoad([{ title: 'Intro', pageIndex: 1, children: [] }])
+      await waitFor(() =>
+        wrapper.find('.v-navigation-drawer--active').exists(),
+      )
+      expect(
+        wrapper.find('.v-navigation-drawer--active').exists(),
+      ).toBe(true)
+
+      // 後片付け: ドロワー open で表示された PdfThumbnail が実 doc に対して
+      // 発行する getPage がインフライトのまま afterAll の loadingTask.destroy()
+      // と競合し、worker null 参照の未処理拒否を起こさないよう、アンマウントして
+      // 保留中の getPage を流し切る。
+      wrapper.unmount()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+  })
+
   describe('サムネイル一覧の内包', () => {
     it('サムネイルタブで PdfThumbnail を埋め込む', async () => {
       const { wrapper } = await mountWithOutline([])

@@ -57,6 +57,13 @@ const outline = usePdfOutline()
 /** タブ選択（'outline' | 'thumbnails'）。 */
 const tab = ref<'outline' | 'thumbnails'>('outline')
 
+/**
+ * ドロワーの開閉モデル（要件 5.9）。初期は閉。`permanent` を使わず v-model 制御に
+ * することで、本文（PdfViewport）が先に表示され、アウトライン/サムネイル準備が
+ * 整った後にレイアウトドロワーとしてスライドインさせる（overlay にはしない）。
+ */
+const drawerOpen = ref(false)
+
 /** ルートで保持するアウトライン木（doc 確定時に load した結果）。 */
 const outlineTree = ref<OutlineNode[]>([])
 /** load 完了フラグ（未完了時に判定を確定させないため）。 */
@@ -134,6 +141,9 @@ if (isRoot) {
 
 /** doc が差し替わったらアウトラインを再取得する（ルートのみ）。 */
 async function reloadOutline(): Promise<void> {
+  // (再)読み込み開始時はドロワーを閉じる（要件 5.9）。新しいドキュメントでは
+  // まず本文を見せ、準備が整ってからスライドインさせるため、ここで一旦閉じる。
+  drawerOpen.value = false
   const doc = store.doc
   if (doc === null) {
     outlineTree.value = []
@@ -152,6 +162,10 @@ async function reloadOutline(): Promise<void> {
   outlineLoaded.value = true
   // しおりが有ればアウトラインを、無ければサムネイルを既定タブにする（要件 5.5）。
   tab.value = tree.length > 0 ? 'outline' : 'thumbnails'
+  // 準備完了後にドロワーをスライドイン（要件 5.9）。model-value が true に
+  // 変わると Vuetify がスライドアニメーションを行う。
+  await nextTick()
+  drawerOpen.value = true
 }
 
 if (isRoot) {
@@ -211,7 +225,7 @@ function selectNode(node: OutlineNode): void {
   <!-- ルート描画: ドロワー枠 + タブ + 各セクション。 -->
   <v-navigation-drawer
     v-else
-    permanent
+    v-model="drawerOpen"
     class="pdf-sidebar"
     data-test="pdf-sidebar"
     width="280"

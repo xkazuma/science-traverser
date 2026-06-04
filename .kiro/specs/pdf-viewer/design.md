@@ -248,6 +248,7 @@ sequenceDiagram
 | 4.1, 4.2 | ズーム/クランプ | PdfToolbar, pdfStore, usePdfPageRender | `PdfState`, `PageRender` | ズーム/再描画 |
 | 4.3, 4.4, 4.5 | フィット/リサイズ | PdfViewport, pdfStore | `PdfState` | ズーム/再描画 |
 | 5.1, 5.2, 5.5 | アウトライン（5.5=未取得時タブ非表示） | PdfSidebar, usePdfOutline | `Outline` | — |
+| 5.9 | ドロワーのスライド表示・順序 | PdfSidebar | `PdfState` | — |
 | 5.3, 5.4 | サムネイル | PdfSidebar, PdfThumbnail | `Virtualizer` | — |
 | 5.6 | ナビ領域と本文の独立スクロール | PdfViewer, PdfDropZone, PdfViewport | アプリシェル高さ規約 | — |
 | 5.7 | 現在ページのアウトライン強調 | PdfSidebar, pdfStore | `PdfState` | — |
@@ -490,6 +491,11 @@ export interface PdfOverlaySlotProps {
   **アウトライン未取得時のタブ制御（要件 5.5・改訂）**: `outlineLoaded && tree.length === 0` のとき
   アウトラインのタブ／ペインを `v-if` で非表示にし、サムネイルのみ表示。既定タブも `thumbnails` に
   切り替える（「アウトラインがありません」メッセージは廃止）。
+  **ドロワーのスライド表示と順序（要件 5.9）**: ドロワーは `permanent` ではなく `v-model="drawerOpen"`
+  のレイアウトドロワー（`temporary` を付けずスライド遷移）。`drawerOpen` 初期 `false`。`reloadOutline()`
+  でアウトライン読込が完了した後に `nextTick` を挟んで `true` にしてスライドイン。PDF（PdfViewport）は
+  `status==='ready'` で即マウントされるため、本文表示が先・ドロワー出現が後になる。doc 切替時は
+  読込開始で `false`（閉）→ 完了で `true`（開）。
 - **PdfViewport / PdfPage / PdfCanvasLayer / PdfTextLayer**: スクロール容器と3層スタック（素の DOM/canvas）。`.pdf-viewport` は bounded 高 + `overflow:auto` で内部スクロールを所有（要件 5.6）。
   **水平中央揃え（要件 2.5）**: 各ページプレースホルダは絶対配置で `left: max(0px, calc(50% - 幅/2))` とし、ページ幅が表示領域より狭いときは左右余白を均等に中央寄せ、広いとき（ズームイン）は `0` に張り付き従来どおり水平スクロールする。純CSSのためコンテナ幅にリアクティブ。
 - **PdfLoadingState / PdfErrorState**: `VProgressLinear`/`VProgressCircular`/`VAlert`/`VEmptyState` で進捗・初期案内・破損/パスワード/非PDF を表示。
