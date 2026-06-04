@@ -74,28 +74,61 @@ onBeforeUnmount(() => {
 
 <!--
   非 scoped: pdfjs v6 TextLayer が動的生成する <span> グリフを確実に対象化するため。
-  pdfjs はグリフ色を設定しないので、消費側で透明化しないと既定色（白等）の文字が
-  描画画像に重なって読みにくくなる。グリフは「選択用に存在するが視覚的には不可視」が
-  正しい挙動（design.md「不可視・選択可能なグリフ」/ 要件 2.3 の選択は維持）。
+  pdfjs v6 のテキスト層 CSS（pdf_viewer.css の .textLayer 相当）を `.text-layer` に移植する。
+  v6 は各 span に CSS 変数（--font-height/--scale-x/--rotate）を inline 設定するだけで、
+  実際の font-size/transform は下記 CSS 規則が適用する設計。これが無いとグリフのサイズ・
+  位置が崩れ、透明な選択判定領域が描画画像とズレる（要件 2.3 選択 / 2.4 位置整合）。
+  グリフ自体は透明（選択用に存在するが視覚的には不可視）。--total-scale-factor は
+  usePdfTextLayer が viewport.scale に設定する。
 -->
 <style>
 .text-layer {
+  position: absolute;
+  text-align: initial;
+  inset: 0;
+  overflow: clip;
+  line-height: 1;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+  transform-origin: 0 0;
   color: transparent;
-  /* pdfjs 標準のテキスト層選択挙動（要件 2.3）。グリフは透明だが選択は可能。 */
   cursor: text;
-  user-select: text;
-  -webkit-user-select: text;
+  /* setLayerDimensions の round() 用デフォルト（width/height を整数px化）。 */
+  --scale-round-x: 1px;
+  --scale-round-y: 1px;
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
 }
-.text-layer span,
-.text-layer br {
-  /* グリフを不可視化（pdfjs はインライン color を付けないため CSS で確実に消す）。 */
+.text-layer :is(span, br) {
+  /* グリフは透明（選択用に存在）。pdfjs はインライン color を付けないため CSS で消す。 */
   color: transparent !important;
+  position: absolute;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0% 0%;
+  -webkit-user-select: text;
+  user-select: text;
+}
+/* v6 が各 span に inline 設定する --font-height/--scale-x/--rotate を実 CSS に適用。 */
+.text-layer > :not(.markedContent),
+.text-layer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  --scale-x: 1;
+  --rotate: 0deg;
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x))
+    scale(var(--min-font-size-inv));
+}
+.text-layer .markedContent {
+  display: contents;
 }
 /* 選択時だけ範囲ハイライトを見せる（テキスト自体は透明のまま）。 */
-.text-layer span::selection {
+.text-layer ::selection {
   background: rgba(0, 100, 255, 0.25);
 }
-.text-layer span::-moz-selection {
+.text-layer ::-moz-selection {
   background: rgba(0, 100, 255, 0.25);
 }
 </style>

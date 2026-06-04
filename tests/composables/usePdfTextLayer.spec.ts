@@ -86,8 +86,18 @@ describe('usePdfTextLayer', () => {
       String(scale),
     )
 
+    // CRITICAL (Req 2.4): v6's setLayerDimensions sizes width/height via
+    // `var(--total-scale-factor)` and the glyph font-size CSS uses it too. It is
+    // a DIFFERENT variable from --scale-factor and MUST be set, or the layer box
+    // and glyphs resolve against an undefined var and the text drifts from the
+    // canvas. Regression guard: assert --total-scale-factor equals the scale.
+    expect(container.style.getPropertyValue('--total-scale-factor')).toBe(
+      String(scale),
+    )
+
     // pdfjs' TextLayer constructor sizes the container to the same scaled page
-    // box as the canvas via `--total-scale-factor` (= --scale-factor × DPR), so
+    // box as the canvas via `--total-scale-factor` (= the viewport scale; pdfjs
+    // defines it as --scale-factor × --user-unit, user-unit defaulting to 1), so
     // the layer overlays the canvas at every zoom. The dims are expressed
     // relative to the *unscaled* page (200×200 MediaBox) and resolve, through
     // --scale-factor, to the scaled viewport dims (200 × 1.5 = 300).

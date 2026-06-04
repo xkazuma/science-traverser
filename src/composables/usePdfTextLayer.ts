@@ -61,14 +61,18 @@ export function usePdfTextLayer(): UsePdfTextLayer {
     cancel()
     container.replaceChildren()
 
-    // 2) v6 lays out every glyph (and sizes the layer box) relative to this CSS
-    //    var; it must equal the viewport scale or the text drifts from the
-    //    canvas as you zoom (Req 2.4 position alignment). MUST be set before the
-    //    TextLayer constructor, whose `setLayerDimensions()` reads it to fix the
-    //    container's width/height to the same scaled page box as the canvas
-    //    (= same origin + same dims, design.md L382). The component
-    //    (task 3.5) absolutely-positions this container over the canvas.
+    // 2) v6 sizes the layer box and every glyph relative to `--total-scale-factor`
+    //    (NOT `--scale-factor`): `setLayerDimensions()` sets width/height via
+    //    `round(down, var(--total-scale-factor) * pageW px, var(--scale-round-x))`
+    //    and the glyph font-size CSS uses `--total-scale-factor`. It MUST equal
+    //    the viewport scale or the text drifts/mis-sizes against the canvas
+    //    (Req 2.4 position alignment). Must be set BEFORE the TextLayer
+    //    constructor. `--scale-factor` is kept for compatibility (pdfjs defines
+    //    `--total-scale-factor: calc(var(--scale-factor) * var(--user-unit))`,
+    //    user-unit defaulting to 1). The component (task 3.5) absolutely-positions
+    //    this container over the canvas (same origin + same dims, design.md L382).
     container.style.setProperty('--scale-factor', String(viewport.scale))
+    container.style.setProperty('--total-scale-factor', String(viewport.scale))
 
     // 3) Stream the page's text content (no canvas/Worker needed) and lay it out
     //    via the v6 TextLayer class. Its constructor calls
